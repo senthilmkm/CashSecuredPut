@@ -32,6 +32,7 @@ import { CSPTrade } from '../hooks/useAppStorage';
 
 interface ActiveTradesProps {
   trades: CSPTrade[];
+  history?: CSPTrade[];
   onUpdateStatus: (tradeId: string, status: 'expired_worthless' | 'assigned' | 'closed_early') => void;
   onRemoveTrade: (tradeId: string) => void;
   onRollTrade: (trade: CSPTrade) => void;
@@ -43,18 +44,21 @@ const COVERED_PROFIT_APP_STORE_URL = 'https://apps.apple.com/app/id6788692802';
 
 export default function ActiveTrades({
   trades,
+  history = [],
   onUpdateStatus,
   onRemoveTrade,
   onRollTrade,
   onOpenPaywall,
   isPremium,
 }: ActiveTradesProps) {
+  const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'itm' | 'expiring'>('all');
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exportData, setExportData] = useState<{ ticker: string; costBasis: string; shares: number } | null>(null);
 
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
   const totalPremium = trades.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
+  const totalLifetimeRealized = history.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
 
   const filteredTrades = trades.filter((t) => {
     const isITM = t.strikePrice > t.stockPrice;
@@ -105,22 +109,64 @@ export default function ActiveTrades({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      {/* Portfolio Overview Summary Cards */}
-      <View style={styles.overviewGrid}>
-        <View style={styles.overviewCard}>
-          <Text style={styles.overviewLabel}>Locked Collateral</Text>
-          <Text style={styles.overviewValPrimary}>${totalCollateral.toLocaleString()}</Text>
-          <Text style={styles.overviewSub}>{trades.length} Active Position{trades.length !== 1 ? 's' : ''}</Text>
-        </View>
-
-        <View style={styles.overviewCard}>
-          <Text style={styles.overviewLabel}>Net Premium Collected</Text>
-          <Text style={styles.overviewValSuccess}>+${totalPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-          <Text style={styles.overviewSub}>
-            Avg ROC: {totalCollateral > 0 ? ((totalPremium / totalCollateral) * 100).toFixed(2) : '0.00'}%
+      {/* Portfolio View Mode Segmented Selector */}
+      <View style={styles.viewModeSegment}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, viewMode === 'active' && styles.segmentBtnActive]}
+          onPress={() => setViewMode('active')}
+          activeOpacity={0.8}
+        >
+          <Briefcase size={14} color={viewMode === 'active' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+          <Text style={[styles.segmentText, viewMode === 'active' && styles.segmentTextActive]}>
+            Active Trades ({trades.length})
           </Text>
-        </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.segmentBtn, viewMode === 'history' && styles.segmentBtnActive]}
+          onPress={() => setViewMode('history')}
+          activeOpacity={0.8}
+        >
+          <Clock size={14} color={viewMode === 'history' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+          <Text style={[styles.segmentText, viewMode === 'history' && styles.segmentTextActive]}>
+            Trade History ({history.length})
+          </Text>
+        </TouchableOpacity>
       </View>
+      {/* Overview Summary Cards (Active vs History) */}
+      {viewMode === 'active' ? (
+        <View style={styles.overviewGrid}>
+          <View style={styles.overviewCard}>
+            <Text style={styles.overviewLabel}>Locked Collateral</Text>
+            <Text style={styles.overviewValPrimary}>${totalCollateral.toLocaleString()}</Text>
+            <Text style={styles.overviewSub}>{trades.length} Active Position{trades.length !== 1 ? 's' : ''}</Text>
+          </View>
+
+          <View style={styles.overviewCard}>
+            <Text style={styles.overviewLabel}>Active Net Premium</Text>
+            <Text style={styles.overviewValSuccess}>+${totalPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            <Text style={styles.overviewSub}>
+              Avg ROC: {totalCollateral > 0 ? ((totalPremium / totalCollateral) * 100).toFixed(2) : '0.00'}%
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.overviewGrid}>
+          <View style={styles.overviewCard}>
+            <Text style={styles.overviewLabel}>Lifetime Realized Income</Text>
+            <Text style={styles.overviewValSuccess}>+${totalLifetimeRealized.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            <Text style={styles.overviewSub}>From {history.length} Completed Trades</Text>
+          </View>
+
+          <View style={styles.overviewCard}>
+            <Text style={styles.overviewLabel}>Completed Positions</Text>
+            <Text style={styles.overviewValPrimary}>{history.length}</Text>
+            <Text style={styles.overviewSub}>
+              {history.filter(h => h.status === 'expired_worthless').length} Expired Worthless
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Free Tier Limit Warning Banner */}
       {!isPremium && trades.length >= 3 && (
@@ -135,7 +181,82 @@ export default function ActiveTrades({
         </TouchableOpacity>
       )}
 
-      {/* Filter Tabs */}
+      {/* Active vs History Lists */}
+      {viewMode === 'history' ? (
+        history.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Clock color="#475569" size={48} style={{ marginBottom: 12 }} />
+            <Text style={styles.emptyTitle}>No Trade History Yet</Text>
+            <Text style={styles.emptySub}>
+              Positions marked as expired, assigned, or closed early will appear here automatically.
+            </Text>
+          </View>
+        ) : (
+          history.map((hTrade) => {
+            const netIncome = ((hTrade.cumulativePremium || hTrade.premium) * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
+            const statusLabel =
+              hTrade.status === 'expired_worthless'
+                ? 'Expired Worthless (100% Win)'
+                : hTrade.status === 'assigned'
+                ? 'Assigned (Exported)'
+                : 'Closed Early';
+
+            const statusStyle =
+              hTrade.status === 'expired_worthless'
+                ? styles.tagOTM
+                : hTrade.status === 'assigned'
+                ? styles.tagITM
+                : styles.tagWarning;
+
+            const textStyle =
+              hTrade.status === 'expired_worthless'
+                ? styles.tagTextOTM
+                : hTrade.status === 'assigned'
+                ? styles.tagTextITM
+                : styles.tagTextWarning;
+
+            return (
+              <View key={hTrade.id} style={styles.tradeCard}>
+                <View style={styles.cardTopRow}>
+                  <View style={styles.tickerGroup}>
+                    <Text style={styles.tickerText}>{hTrade.ticker}</Text>
+                    <View style={[styles.statusTag, statusStyle]}>
+                      <Text style={[styles.tagText, textStyle]}>{statusLabel}</Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600' }}>
+                    {hTrade.contracts} Contract{hTrade.contracts !== 1 ? 's' : ''}
+                  </Text>
+                </View>
+
+                <View style={styles.tradeGrid}>
+                  <View style={styles.tradeCol}>
+                    <Text style={styles.tradeLabel}>Strike Price</Text>
+                    <Text style={styles.tradeVal}>${hTrade.strikePrice.toFixed(2)}</Text>
+                  </View>
+
+                  <View style={styles.tradeCol}>
+                    <Text style={styles.tradeLabel}>Realized Income</Text>
+                    <Text style={styles.tradeValSuccess}>+${netIncome}</Text>
+                  </View>
+
+                  <View style={styles.tradeCol}>
+                    <Text style={styles.tradeLabel}>Effective Basis</Text>
+                    <Text style={styles.tradeVal}>${(hTrade.strikePrice - hTrade.premium).toFixed(2)}</Text>
+                  </View>
+
+                  <View style={styles.tradeCol}>
+                    <Text style={styles.tradeLabel}>Collateral</Text>
+                    <Text style={styles.tradeValPrimary}>${(hTrade.strikePrice * 100 * hTrade.contracts).toLocaleString()}</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })
+        )
+      ) : (
+        <>
+          {/* Filter Tabs */}
       <View style={styles.filterRow}>
         <TouchableOpacity
           style={[styles.filterChip, selectedFilter === 'all' && styles.filterChipActive]}
@@ -256,6 +377,9 @@ export default function ActiveTrades({
         })
       )}
 
+        </>
+      )}
+
       {/* Wheel Strategy Assignment Export Modal */}
       <Modal visible={exportModalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -300,6 +424,40 @@ export default function ActiveTrades({
 }
 
 const styles = StyleSheet.create({
+    viewModeSegment: {
+      flexDirection: 'row',
+      backgroundColor: '#161E2E',
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: '#1E293B',
+    },
+    segmentBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderRadius: 8,
+    },
+    segmentBtnActive: {
+      backgroundColor: '#3B82F6',
+    },
+    segmentText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#64748B',
+    },
+    segmentTextActive: {
+      color: '#FFF',
+    },
+    tagWarning: {
+      backgroundColor: '#451A03',
+    },
+    tagTextWarning: {
+      color: '#F59E0B',
+    },
   container: {
     flex: 1,
     backgroundColor: '#0B0F19',
