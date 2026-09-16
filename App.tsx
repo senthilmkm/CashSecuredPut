@@ -170,8 +170,8 @@ export default function App() {
             expirationAlertThreshold={expirationAlertThreshold}
             trades={trades}
             history={history}
-            onUpdateRetention={updateRetentionDays}
-            onUpdateAlertThreshold={updateExpirationAlertThreshold}
+            updateRetentionDays={updateRetentionDays}
+            updateExpirationAlertThreshold={updateExpirationAlertThreshold}
             onClearData={clearAllData}
             onOpenPaywall={() => setShowPaywall(true)}
           />
