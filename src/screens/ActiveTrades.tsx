@@ -78,22 +78,17 @@ export default function ActiveTrades({
 
   const handleLaunchCoveredProfit = async () => {
     if (!exportData) return;
-    const deepLinkUrl = `coveredprofit://importTrade?ticker=${exportData.ticker}&costBasis=${exportData.costBasis}&shares=${exportData.shares}`;
+    const deepLinkUrl = coveredprofit://importTrade?ticker=&costBasis=&shares=;
     
     try {
-      const canOpen = await Linking.canOpenURL(deepLinkUrl);
-      if (canOpen) {
-        await Linking.openURL(deepLinkUrl);
-      } else {
-        // App is not installed -> Open App Store page directly!
-        await Linking.openURL(COVERED_PROFIT_APP_STORE_URL);
-      }
+      // Attempt direct launch into CoveredProfit app first
+      await Linking.openURL(deepLinkUrl);
     } catch (e) {
-      // Fallback open App Store
+      // CoveredProfit app is not installed on device -> Fallback to App Store!
       try {
         await Linking.openURL(COVERED_PROFIT_APP_STORE_URL);
       } catch (err) {
-        Alert.alert('App Store Error', 'Could not open App Store link.');
+        Alert.alert('App Store Error', 'Could not open CoveredProfit or App Store.');
       }
     }
   };
