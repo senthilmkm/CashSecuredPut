@@ -175,27 +175,27 @@ export default function Calculator({
             {/* 4-Card Metrics Grid */}
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Collateral</Text>
-                <Text style={styles.metricValuePrimary}>${metrics.collateralRequired.toLocaleString()}</Text>
-                <Text style={styles.metricSub}>{parsedContracts * 100} shares</Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Collateral</Text>
+                <Text style={styles.metricValuePrimary} numberOfLines={1} adjustsFontSizeToFit>${metrics.collateralRequired.toLocaleString()}</Text>
+                <Text style={styles.metricSub} numberOfLines={1}>{parsedContracts * 100} shares</Text>
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Net Income</Text>
-                <Text style={styles.metricValueSuccess}>+${metrics.netPremium.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
-                <Text style={styles.metricSub}>ROC: {metrics.returnOnCapitalPercent}%</Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Net Income</Text>
+                <Text style={styles.metricValueSuccess} numberOfLines={1} adjustsFontSizeToFit>+${metrics.netPremium.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
+                <Text style={styles.metricSub} numberOfLines={1}>ROC: {metrics.returnOnCapitalPercent}%</Text>
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Annual APR</Text>
-                <Text style={styles.metricValuePrimary}>{metrics.annualizedApr}%</Text>
-                <Text style={styles.metricSub}>APY: {metrics.annualizedApy}%</Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Annual APR</Text>
+                <Text style={styles.metricValuePrimary} numberOfLines={1} adjustsFontSizeToFit>{metrics.annualizedApr}%</Text>
+                <Text style={styles.metricSub} numberOfLines={1}>APY: {metrics.annualizedApy}%</Text>
               </View>
 
               <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Cost Basis</Text>
-                <Text style={styles.metricValueSuccess}>${metrics.effectiveCostBasis.toFixed(2)}</Text>
-                <Text style={styles.metricSub}>{metrics.effectiveDiscountPercent}% discount</Text>
+                <Text style={styles.metricLabel} numberOfLines={1}>Cost Basis</Text>
+                <Text style={styles.metricValueSuccess} numberOfLines={1} adjustsFontSizeToFit>${metrics.effectiveCostBasis.toFixed(2)}</Text>
+                <Text style={styles.metricSub} numberOfLines={1}>{metrics.effectiveDiscountPercent}% discount</Text>
               </View>
             </View>
           </View>
@@ -382,29 +382,36 @@ const styles = StyleSheet.create({
     width: '23.5%',
     backgroundColor: '#0B0F19',
     borderRadius: 10,
-    padding: 9,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#1E293B',
   },
   metricLabel: {
-    fontSize: 10.5,
+    fontSize: 10,
     color: '#64748B',
     marginBottom: 3,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   metricValuePrimary: {
-    fontSize: 15.5,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#3B82F6',
+    textAlign: 'center',
   },
   metricValueSuccess: {
-    fontSize: 15.5,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#10B981',
+    textAlign: 'center',
   },
   metricSub: {
-    fontSize: 9.5,
+    fontSize: 9,
     color: '#94A3B8',
     marginTop: 1,
+    textAlign: 'center',
   },
   formCard: {
     backgroundColor: '#161E2E',
