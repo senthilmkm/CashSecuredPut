@@ -157,55 +157,57 @@ export default function Calculator({
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* 1. COMPACT HERO SCORECARD & METRICS ROW */}
+        {/* 1. HERO SCORECARD & HEALTH GAUGE CARD */}
         {metrics && (
-          <View style={styles.compactScoreCard}>
-            <View style={styles.scoreTopRow}>
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreHeader}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={styles.scoreTitle}>{ticker} CSP Scorecard</Text>
-                  <View style={[styles.miniScoreBadge, { backgroundColor: getScoreColor(metrics.score) }]}>
-                    <Text style={styles.miniScoreBadgeText}>{metrics.score}/100</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                  <Text style={styles.scoreTitle}>{ticker} CSP Health Scorecard</Text>
+                  <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(metrics.score) }]}>
+                    <Text style={styles.scoreBadgeText}>{metrics.score}/100</Text>
                   </View>
                 </View>
-                <Text style={styles.recTitleText} numberOfLines={1}>{metrics.recommendationTitle}</Text>
+                <Text style={styles.recTitleText}>{metrics.recommendationTitle}</Text>
               </View>
             </View>
 
-            {/* Compact 4-Card Grid */}
-            <View style={styles.compactGrid}>
-              <View style={styles.compactMetricItem}>
-                <Text style={styles.cMetricLabel}>Collateral</Text>
-                <Text style={styles.cMetricValuePrimary}>${metrics.collateralRequired.toLocaleString()}</Text>
-                <Text style={styles.cMetricSub}>{parsedContracts * 100} sh</Text>
+            {/* 4-Card Metrics Grid */}
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Collateral</Text>
+                <Text style={styles.metricValuePrimary}>${metrics.collateralRequired.toLocaleString()}</Text>
+                <Text style={styles.metricSub}>{parsedContracts * 100} shares</Text>
               </View>
 
-              <View style={styles.compactMetricItem}>
-                <Text style={styles.cMetricLabel}>Net Income</Text>
-                <Text style={styles.cMetricValueSuccess}>+${metrics.netPremium.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
-                <Text style={styles.cMetricSub}>ROC: {metrics.returnOnCapitalPercent}%</Text>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Net Income</Text>
+                <Text style={styles.metricValueSuccess}>+${metrics.netPremium.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
+                <Text style={styles.metricSub}>ROC: {metrics.returnOnCapitalPercent}%</Text>
               </View>
 
-              <View style={styles.compactMetricItem}>
-                <Text style={styles.cMetricLabel}>APR / APY</Text>
-                <Text style={styles.cMetricValuePrimary}>{metrics.annualizedApr}%</Text>
-                <Text style={styles.cMetricSub}>APY: {metrics.annualizedApy}%</Text>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Annual APR</Text>
+                <Text style={styles.metricValuePrimary}>{metrics.annualizedApr}%</Text>
+                <Text style={styles.metricSub}>APY: {metrics.annualizedApy}%</Text>
               </View>
 
-              <View style={styles.compactMetricItem}>
-                <Text style={styles.cMetricLabel}>Cost Basis</Text>
-                <Text style={styles.cMetricValueSuccess}>${metrics.effectiveCostBasis.toFixed(2)}</Text>
-                <Text style={styles.cMetricSub}>{metrics.effectiveDiscountPercent}% off</Text>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Cost Basis</Text>
+                <Text style={styles.metricValueSuccess}>${metrics.effectiveCostBasis.toFixed(2)}</Text>
+                <Text style={styles.metricSub}>{metrics.effectiveDiscountPercent}% discount</Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* 2. COMPACT SEARCH & FORM PARAMETERS CARD */}
-        <View style={styles.compactFormCard}>
+        {/* 2. SEARCH & PARAMETERS CARD */}
+        <View style={styles.formCard}>
+          <Text style={styles.cardSectionTitle}>Search & Trade Parameters</Text>
+          
           <View style={styles.searchRow}>
             <View style={styles.tickerBox}>
-              <Search color="#94A3B8" size={14} style={{ marginRight: 4 }} />
+              <Search color="#94A3B8" size={16} style={{ marginRight: 6 }} />
               <TextInput
                 style={styles.tickerInput}
                 value={ticker}
@@ -219,12 +221,12 @@ export default function Calculator({
               {fetchingQuote ? (
                 <ActivityIndicator color="#FFF" size="small" />
               ) : (
-                <Text style={styles.fetchBtnText}>Quote</Text>
+                <Text style={styles.fetchBtnText}>Fetch Quote</Text>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* Compact Input Matrix */}
+          {/* Form Matrix */}
           <View style={styles.formMatrix}>
             <View style={styles.mCol}>
               <Text style={styles.mLabel}>Stock ($)</Text>
@@ -252,21 +254,21 @@ export default function Calculator({
             </View>
           </View>
 
-          {/* Quick Net Income Helper Bar */}
+          {/* Dynamic Helper Bar */}
           <View style={styles.helperBar}>
             <Text style={styles.helperBarText}>
-              Total Cash Collected: <Text style={{ color: '#10B981', fontWeight: '800' }}>+${totalCashCollected.toFixed(2)}</Text> ({parsedContracts * 100} shares)
+              Total Net Premium Collected: <Text style={{ color: '#10B981', fontWeight: '800' }}>+${totalCashCollected.toFixed(2)}</Text> ({parsedContracts * 100} shares locked)
             </Text>
           </View>
         </View>
 
-        {/* 3. COMPACT LIVE OPTIONS CHAIN LIST */}
-        <View style={styles.compactChainCard}>
+        {/* 3. LIVE OPTIONS CHAIN CARD */}
+        <View style={styles.chainCard}>
           <View style={styles.chainHeaderRow}>
-            <Text style={styles.sectionTitle}>Put Option Chain</Text>
+            <Text style={styles.cardSectionTitle}>Live Options Chain (Puts)</Text>
             {!isPremium && (
               <View style={styles.proTag}>
-                <Crown color="#F59E0B" size={10} style={{ marginRight: 2 }} />
+                <Crown color="#F59E0B" size={11} style={{ marginRight: 3 }} />
                 <Text style={styles.proTagText}>PRO</Text>
               </View>
             )}
@@ -274,41 +276,41 @@ export default function Calculator({
 
           {isPremium ? (
             optionChain.length > 0 ? (
-              <View style={{ maxHeight: 150 }}>
+              <View style={{ maxHeight: 220 }}>
                 <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                   {optionChain.map((contract: CSPOptionContract, idx: number) => {
                     const isSelected = selectedContract?.symbol === contract.symbol || strikePrice === contract.strike.toFixed(2);
                     return (
                       <TouchableOpacity
                         key={contract.symbol || idx}
-                        style={[styles.miniChainRow, isSelected && styles.miniChainRowSelected]}
+                        style={[styles.chainRow, isSelected && styles.chainRowSelected]}
                         onPress={() => selectContractFromChain(contract)}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.mChainStrike}>${contract.strike.toFixed(2)} Put</Text>
-                        <Text style={styles.mChainExp}>{contract.expiration}</Text>
-                        <Text style={styles.mChainPrem}>+${contract.premium.toFixed(2)}</Text>
+                        <Text style={styles.chainStrike}>${contract.strike.toFixed(2)} Put</Text>
+                        <Text style={styles.chainExp}>{contract.expiration}</Text>
+                        <Text style={styles.chainPrem}>+${contract.premium.toFixed(2)}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </ScrollView>
               </View>
             ) : (
-              <ActivityIndicator color="#10B981" style={{ margin: 10 }} />
+              <ActivityIndicator color="#10B981" style={{ margin: 12 }} />
             )
           ) : (
-            <TouchableOpacity style={styles.compactPaywallOverlay} onPress={onOpenPaywall} activeOpacity={0.85}>
-              <Sparkles size={18} color="#F59E0B" style={{ marginRight: 6 }} />
-              <Text style={styles.compactPaywallText}>Unlock Live Option Chains & 1-Tap Auto-fill</Text>
+            <TouchableOpacity style={styles.paywallOverlay} onPress={onOpenPaywall} activeOpacity={0.85}>
+              <Sparkles size={20} color="#F59E0B" style={{ marginRight: 8 }} />
+              <Text style={styles.paywallText}>Unlock Live Option Chains & 1-Tap Auto-fill</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* 4. COMPACT ACTION BUTTONS */}
+        {/* 4. ACTION BUTTONS */}
         <View style={styles.actionButtonsRow}>
           <TouchableOpacity style={styles.saveTradeBtn} onPress={handleSavePosition} activeOpacity={0.85}>
             <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
-              <Plus color="#FFF" size={16} style={{ marginRight: 4 }} />
+              <Plus color="#FFF" size={18} style={{ marginRight: 6 }} />
               <Text style={styles.btnText}>Save Position</Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -318,8 +320,8 @@ export default function Calculator({
             onPress={() => onOpenRollSim(metrics)}
             activeOpacity={0.85}
           >
-            <RefreshCw color="#3B82F6" size={16} style={{ marginRight: 4 }} />
-            <Text style={styles.rollBtnText}>Roll Sim</Text>
+            <RefreshCw color="#3B82F6" size={18} style={{ marginRight: 6 }} />
+            <Text style={styles.rollBtnText}>Roll Simulator</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -333,119 +335,126 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0F19',
   },
   scrollContent: {
-    padding: 10,
-    paddingBottom: 20,
+    padding: 16,
+    paddingBottom: 36,
   },
-  compactScoreCard: {
+  scoreCard: {
     backgroundColor: '#161E2E',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
-  scoreTopRow: {
+  scoreHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   scoreTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '900',
     color: '#F8FAFC',
     marginRight: 8,
   },
-  miniScoreBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+  scoreBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  miniScoreBadgeText: {
+  scoreBadgeText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
   },
   recTitleText: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 1,
+    marginTop: 3,
   },
-  compactGrid: {
+  metricsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  compactMetricItem: {
+  metricCard: {
     width: '23.5%',
     backgroundColor: '#0B0F19',
-    borderRadius: 8,
-    padding: 6,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
-  cMetricLabel: {
-    fontSize: 9,
+  metricLabel: {
+    fontSize: 11,
     color: '#64748B',
-    marginBottom: 1,
+    marginBottom: 4,
   },
-  cMetricValuePrimary: {
-    fontSize: 13,
+  metricValuePrimary: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#3B82F6',
   },
-  cMetricValueSuccess: {
-    fontSize: 13,
+  metricValueSuccess: {
+    fontSize: 16,
     fontWeight: '800',
     color: '#10B981',
   },
-  cMetricSub: {
-    fontSize: 8,
+  metricSub: {
+    fontSize: 10,
     color: '#94A3B8',
+    marginTop: 2,
   },
-  compactFormCard: {
+  formCard: {
     backgroundColor: '#161E2E',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#1E293B',
+  },
+  cardSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    marginBottom: 10,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   tickerBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0B0F19',
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#334155',
     marginRight: 8,
-    height: 36,
+    height: 44,
   },
   tickerInput: {
     flex: 1,
     color: '#F8FAFC',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
   },
   fetchBtn: {
     backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    height: 36,
-    paddingHorizontal: 14,
+    borderRadius: 10,
+    height: 44,
+    paddingHorizontal: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   fetchBtnText: {
     color: '#FFF',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 14,
   },
   formMatrix: {
     flexDirection: 'row',
@@ -455,40 +464,40 @@ const styles = StyleSheet.create({
     width: '18.5%',
   },
   mLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#94A3B8',
-    marginBottom: 3,
+    marginBottom: 5,
     fontWeight: '600',
   },
   mInput: {
     backgroundColor: '#0B0F19',
-    borderRadius: 6,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#334155',
     color: '#F8FAFC',
     paddingHorizontal: 6,
-    height: 34,
-    fontSize: 13,
+    height: 44,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
   },
   helperBar: {
-    marginTop: 8,
+    marginTop: 12,
     backgroundColor: '#0B0F19',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
   },
   helperBarText: {
-    fontSize: 10,
+    fontSize: 12,
     color: '#94A3B8',
     textAlign: 'center',
   },
-  compactChainCard: {
+  chainCard: {
     backgroundColor: '#161E2E',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
@@ -496,69 +505,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#F8FAFC',
+    marginBottom: 10,
   },
   proTag: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#451A03',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   proTagText: {
     color: '#F59E0B',
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '800',
   },
-  miniChainRow: {
+  chainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#0B0F19',
     borderWidth: 1,
     borderColor: '#334155',
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginBottom: 4,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
   },
-  miniChainRowSelected: {
+  chainRowSelected: {
     borderColor: '#10B981',
     backgroundColor: '#0F291E',
   },
-  mChainStrike: {
+  chainStrike: {
     color: '#F8FAFC',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
   },
-  mChainExp: {
+  chainExp: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 13,
   },
-  mChainPrem: {
+  chainPrem: {
     color: '#10B981',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '800',
   },
-  compactPaywallOverlay: {
+  paywallOverlay: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0B0F19',
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  compactPaywallText: {
+  paywallText: {
     color: '#F59E0B',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
   actionButtonsRow: {
@@ -567,11 +571,11 @@ const styles = StyleSheet.create({
   },
   saveTradeBtn: {
     flex: 0.58,
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   btnGradient: {
-    paddingVertical: 11,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -579,13 +583,13 @@ const styles = StyleSheet.create({
   btnText: {
     color: '#FFF',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 16,
   },
   rollSimBtn: {
     flex: 0.38,
     backgroundColor: '#0F172A',
-    borderRadius: 10,
-    paddingVertical: 11,
+    borderRadius: 12,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -595,6 +599,6 @@ const styles = StyleSheet.create({
   rollBtnText: {
     color: '#3B82F6',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 15,
   },
 });
