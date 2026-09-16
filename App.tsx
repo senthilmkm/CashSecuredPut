@@ -146,6 +146,7 @@ export default function App() {
         {currentTab === 'portfolio' && (
           <ActiveTrades
             trades={trades}
+            history={history}
             onUpdateStatus={updateTradeStatus}
             onRemoveTrade={removeTrade}
             onRollTrade={handleOpenRollWithData}
