@@ -287,7 +287,7 @@ export default function ActiveTrades({
                 <TouchableOpacity style={styles.launchBtn} onPress={handleLaunchCoveredProfit} activeOpacity={0.85}>
                   <LinearGradient colors={['#10B981', '#059669']} style={styles.launchGradient}>
                     <ExternalLink color="#FFF" size={18} style={{ marginRight: 8 }} />
-                    <Text style={styles.launchBtnText}>Open CoveredProfit (App Store)</Text>
+                    <Text style={styles.launchBtnText}>Open CoveredProfit App</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
