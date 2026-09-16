@@ -78,7 +78,7 @@ export default function ActiveTrades({
 
   const handleLaunchCoveredProfit = async () => {
     if (!exportData) return;
-    const deepLinkUrl = coveredprofit://importTrade?ticker=&costBasis=&shares=;
+    const deepLinkUrl = `coveredprofit://importTrade?ticker=${exportData.ticker}&costBasis=${exportData.costBasis}&shares=${exportData.shares}`;
     
     try {
       // Attempt direct launch into CoveredProfit app first
