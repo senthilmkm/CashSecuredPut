@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CashSecuredProfit Support & Help Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #161c2d;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --color-primary: #3b82f6;
+      --color-success: #10b981;
+      --color-accent: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.6;
+    }
+    header {
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1000px;
+      margin: 0 auto;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .logo {
+      font-family: var(--font-heading);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #fff;
+      text-decoration: none;
+    }
+    .logo span { color: var(--color-success); }
+    main {
+      max-width: 1000px;
+      margin: 3rem auto;
+      padding: 0 2rem;
+    }
+    h1 {
+      font-family: var(--font-heading);
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+    .subhead {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      margin-bottom: 2.5rem;
+    }
+    .contact-card {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(16, 185, 129, 0.15));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .contact-card h2 {
+      font-family: var(--font-heading);
+      font-size: 1.6rem;
+      color: #fff;
+      margin-bottom: 0.5rem;
+    }
+    .contact-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.2rem;
+    }
+    .email-btn {
+      display: inline-block;
+      background: var(--color-primary);
+      color: #fff;
+      padding: 0.8rem 1.8rem;
+      border-radius: 10px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 1.8rem;
+      margin-bottom: 1.5rem;
+    }
+    h3 {
+      font-family: var(--font-heading);
+      font-size: 1.2rem;
+      color: var(--color-success);
+      margin-bottom: 0.5rem;
+    }
+    p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 0.8rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">CashSecured<span>Profit</span></a>
+  </header>
+  <main>
+    <h1>Help & Support Center</h1>
+    <p class="subhead">Need help with CashSecuredProfit? We're here to assist you.</p>
+
+    <div class="contact-card">
+      <h2>Contact Developer Support</h2>
+      <p>Have questions, feature requests, or subscription inquiries? Send us an email.</p>
+      <a href="mailto:support@cashsecuredprofit.com" class="email-btn">Email Customer Support</a>
+    </div>
+
+    <section>
+      <h3>How do I restore my Pro subscription?</h3>
+      <p>Open CashSecuredProfit, navigate to Settings > Pro Subscription, and tap <strong>"Restore Existing Purchases"</strong>.</p>
+    </section>
+
+    <section>
+      <h3>How does the 7-Day Free App Trial work?</h3>
+      <p>When you install CashSecuredProfit, you automatically get 7 days of full Pro access. After 7 days, you can choose to subscribe to Pro or continue using the Free Tier (up to 3 active saved trades).</p>
+    </section>
+
+    <section>
+      <h3>How do I export assigned trades to CoveredProfit?</h3>
+      <p>When a Put trade is assigned, tap <strong>"Assigned & Export"</strong> in your Portfolio tab. The app calculates your net cost basis (Strike - Premium) and gives you a 1-tap link to open CoveredProfit or copy parameters to clipboard.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "products": {
+    "monthly": {
+      "identifier": "csp_monthly_sub",
+      "priceString": "$4.99",
+      "price": 4.99,
+      "period": "Monthly"
+    },
+    "annual": {
+      "identifier": "csp_annual_sub",
+      "priceString": "$39.99",
+      "price": 39.99,
+      "period": "Annual"
+    }
+  },
+  "freeTier": {
+    "maxSavedTrades": 3,
+    "allowCalculator": true,
+    "allowLiveQuotes": true,
+    "allowRollSimulator": false,
+    "allowExport": false
+  }
+}

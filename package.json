@@ -1,0 +1,40 @@
+{
+  "name": "cashsecuredprofit",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "~2.2.0",
+    "expo": "~57.0.0",
+    "expo-build-properties": "*",
+    "expo-dev-client": "~57.0.5",
+    "expo-file-system": "^57.0.0",
+    "expo-image-picker": "^57.0.2",
+    "expo-linear-gradient": "~57.0.0",
+    "expo-notifications": "~57.0.3",
+    "expo-print": "^57.0.0",
+    "expo-sharing": "^57.0.3",
+    "expo-status-bar": "~57.0.0",
+    "expo-text-extractor": "*",
+    "expo-updates": "~57.0.6",
+    "lucide-react-native": "^0.470.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-purchases": "^10.4.1",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.4",
+    "react-test-renderer": "19.1.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "npx tsx src/__tests__/run-tests.ts"
+  },
+  "private": true
+}

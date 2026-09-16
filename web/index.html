@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CashSecuredProfit — Cash-Secured Put Options & Wheel Strategy Companion</title>
+  <meta name="description" content="Calculate Return on Capital, Effective Stock Cost Basis, and Safety Cushion for Cash-Secured Puts. Master The Wheel Strategy with CashSecuredProfit.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0b0f19;
+      --bg-secondary: #161c2d;
+      --bg-card: rgba(22, 28, 45, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --color-primary: #3b82f6;
+      --color-success: #10b981;
+      --color-accent: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Inter', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-primary);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: var(--text-main);
+      font-family: var(--font-body);
+      line-height: 1.6;
+    }
+    header {
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .logo {
+      font-family: var(--font-heading);
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+    }
+    .logo span { color: var(--color-success); }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      margin-left: 1.5rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--text-main); }
+    .hero {
+      max-width: 1200px;
+      margin: 4rem auto;
+      padding: 0 2rem;
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--color-accent);
+      padding: 0.4rem 1rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+    }
+    h1 {
+      font-family: var(--font-heading);
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(to right, #ffffff, #93c5fd, #6ee7b7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p.lead {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 750px;
+      margin: 0 auto 2.5rem;
+    }
+    .cta-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 3rem;
+    }
+    .btn {
+      padding: 0.9rem 2rem;
+      border-radius: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--color-success), #059669);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .features {
+      max-width: 1200px;
+      margin: 4rem auto;
+      padding: 0 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 2rem;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 2rem;
+      backdrop-filter: blur(10px);
+    }
+    .feature-card h3 {
+      font-family: var(--font-heading);
+      font-size: 1.4rem;
+      margin-bottom: 0.75rem;
+      color: #fff;
+    }
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+    footer {
+      max-width: 1200px;
+      margin: 4rem auto 0;
+      padding: 2rem;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: none; margin-left: 1rem; }
+    footer a:hover { color: var(--text-main); }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="logo">CashSecured<span>Profit</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="support.html">Support</a>
+      <a href="terms.html">Terms</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="badge">7-DAY FREE TRIAL • NO RISK</div>
+    <h1>Master Cash-Secured Puts & The Wheel Strategy</h1>
+    <p class="lead">
+      Instantly evaluate Return on Capital (ROC %), Annualized APR/APY, Effective Stock Cost Basis, and Safety Cushions before entering any put option trade.
+    </p>
+    <div class="cta-buttons">
+      <a href="https://apps.apple.com/app/id6788692802" class="btn btn-primary">Download on the App Store</a>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="feature-card">
+      <h3>Instant CSP Health Score</h3>
+      <p>0–100 Health Scorecard evaluating return efficiency, safety margin, and risk-free Treasury yield spread (~5.0%).</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>Effective Discount Calculator</h3>
+      <p>Calculates exact net acquisition cost if assigned (Strike - Premium) and percentage discount from current stock price.</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>Roll Down & Out Simulator</h3>
+      <p>Simulate net credit/debit, new collateral locked, and updated effective cost basis when rolling put positions.</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>The Wheel Strategy Bridge</h3>
+      <p>Seamlessly export assigned stock cost basis to CoveredProfit to sell Covered Calls on your shares.</p>
+    </div>
+  </section>
+
+  <footer>
+    <div>© 2026 CashSecuredProfit. All rights reserved.</div>
+    <div>
+      <a href="support.html">Support</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="privacy.html">Privacy Policy</a>
+    </div>
+  </footer>
+</body>
+</html>
