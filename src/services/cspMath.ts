@@ -88,7 +88,7 @@ export function calculateCSPMetrics(params: {
   // Compounded APY
   const aprFraction = returnOnCapitalPercent / 100;
   const periodsPerYear = 365 / validDte;
-  const annualizedApy = (Math.pow(1 + aprFraction, periodsPerYear) - 1) * 100;
+  const annualizedApy = (1 + aprFraction > 0) ? (Math.pow(1 + aprFraction, periodsPerYear) - 1) * 100 : 0;
 
   // 5. Safety Cushion (Distance from current stock price to strike)
   // Positive % means stock is above strike (OTM - Safe)

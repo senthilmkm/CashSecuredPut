@@ -39,7 +39,7 @@ export async function fetchStockQuoteFromProxy(
 
   return {
     symbol: cleanSymbol,
-    price: data.price,
+    price: typeof data?.price === 'number' ? data.price : 0,
     change: data.change || 0,
     changePercent: data.changePercent || 0,
     isMocked: false,

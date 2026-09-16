@@ -73,10 +73,10 @@ export function useAppStorage() {
       setTrialDaysRemaining(daysLeft);
 
       if (savedTrades) {
-        setTrades(JSON.parse(savedTrades));
+        try { setTrades(JSON.parse(savedTrades)); } catch (e) { setTrades([]); }
       }
       if (savedHistory) {
-        setHistory(JSON.parse(savedHistory));
+        try { setHistory(JSON.parse(savedHistory)); } catch (e) { setHistory([]); }
       }
       if (savedRetention) {
         setRetentionDays(parseInt(savedRetention, 10));

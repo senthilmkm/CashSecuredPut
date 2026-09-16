@@ -70,7 +70,7 @@ export function runCSPMathTests() {
   assert(itmRes.collateralRequired === 28000, '2 contracts 140 strike = $28,000 collateral');
   assert(itmRes.recommendationType === 'danger', 'ITM trade recommendation is danger');
 
-  // Test 4: Zero / Invalid input guard test (Edge case)
+  // Test 4: Zero / Invalid input & Edge Case NaN protection tests
   const invalidRes = calculateCSPMetrics({
     stockPrice: 0,
     strikePrice: 0,
@@ -80,6 +80,25 @@ export function runCSPMathTests() {
   });
   assert(invalidRes.score === 0, 'Zero stock/strike returns score 0 without NaN crash');
   assert(invalidRes.collateralRequired === 0, 'Zero collateral without crash');
+
+  const negNetRes = calculateCSPMetrics({
+    stockPrice: 100,
+    strikePrice: 90,
+    premium: 0.10,
+    contracts: 1,
+    dte: 30,
+    commissions: 50.00, // High commission causing negative net income
+  });
+  assert(!isNaN(negNetRes.annualizedApy), 'Negative net income APY does not evaluate to NaN');
+
+  const longDteRes = calculateCSPMetrics({
+    stockPrice: 100,
+    strikePrice: 90,
+    premium: 2.00,
+    contracts: 1,
+    dte: 1000,
+  });
+  assert(longDteRes.score >= 0 && !isNaN(longDteRes.annualizedApr), 'Extreme DTE (1000 days) evaluates cleanly without NaN');
 
   // Test 5: Roll Down & Out Simulation
   const rollRes = calculateRollCSP({
