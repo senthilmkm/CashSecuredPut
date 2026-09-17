@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown, Check, X, Shield, RefreshCw, Zap, TrendingUp, Sparkles } from 'lucide-react-native';
@@ -187,10 +188,20 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
           <Text style={styles.restoreText}>Restore Existing Purchases</Text>
         </TouchableOpacity>
 
-        {/* Legal Disclaimer */}
+        {/* Legal Disclaimer & Guideline 3.1.2 Links */}
         <Text style={styles.legalText}>
           Your 7-day free trial will automatically convert to a paid subscription ($39.99/yr or $4.99/mo) unless cancelled at least 24 hours before trial ends. Payment will be charged to your iTunes Account at confirmation of purchase. Manage or cancel in Apple ID Settings.
         </Text>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12, marginBottom: 8 }}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://senthilmkm.github.io/CashSecuredPut/terms.html')}>
+            <Text style={{ color: '#94A3B8', fontSize: 12, textDecorationLine: 'underline' }}>Terms of Use (EULA)</Text>
+          </TouchableOpacity>
+          <Text style={{ color: '#64748B', marginHorizontal: 8, fontSize: 12 }}>•</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://senthilmkm.github.io/CashSecuredPut/privacy.html')}>
+            <Text style={{ color: '#94A3B8', fontSize: 12, textDecorationLine: 'underline' }}>Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
