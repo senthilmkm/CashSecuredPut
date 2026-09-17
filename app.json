@@ -7,14 +7,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0b0f19"
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.senth.cashsecuredprofit",
+      "bundleIdentifier": "com.senthil.CashSecuredProfit",
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -36,6 +31,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0b0f19"
+        }
+      ],
       [
         "expo-build-properties",
         {
