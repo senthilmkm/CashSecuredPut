@@ -22,6 +22,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  ShieldAlert,
 } from 'lucide-react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -360,7 +361,7 @@ export default function Settings({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Support & Legal</Text>
 
-        <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/coveredprofit-docs/support.html')}>
+        <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/CashSecuredPut/support.html')}>
           <View style={styles.linkLeft}>
             <HelpCircle size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
             <Text style={styles.linkLabel}>Help & Support Center</Text>
@@ -368,7 +369,7 @@ export default function Settings({
           <ArrowRight size={16} color="#4B5563" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/coveredprofit-docs/terms.html')}>
+        <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/CashSecuredPut/terms.html')}>
           <View style={styles.linkLeft}>
             <FileText size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
             <Text style={styles.linkLabel}>Terms & Conditions</Text>
@@ -376,13 +377,24 @@ export default function Settings({
           <ArrowRight size={16} color="#4B5563" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/coveredprofit-docs/privacy.html')}>
+        <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/CashSecuredPut/privacy.html')}>
           <View style={styles.linkLeft}>
             <Shield size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
             <Text style={styles.linkLabel}>Privacy Policy</Text>
           </View>
           <ArrowRight size={16} color="#4B5563" />
         </TouchableOpacity>
+      </View>
+
+      {/* 8. Financial & Trading Risk Disclaimer */}
+      <View style={styles.disclaimerCard}>
+        <View style={styles.disclaimerHeader}>
+          <ShieldAlert size={16} color="#F59E0B" style={{ marginRight: 6 }} />
+          <Text style={styles.disclaimerTitle}>Financial & Trading Risk Disclaimer</Text>
+        </View>
+        <Text style={styles.disclaimerText}>
+          CashSecuredProfit is strictly for educational and informational purposes only. The metrics, calculations, health scores, and simulations provided do not constitute financial advice or trade recommendations. Options trading involves substantial risk of loss. Users must conduct their own independent research and market analysis before executing any financial trades. The app creator and owner assume no liability for any trading losses or financial decisions made using this application.
+        </Text>
       </View>
 
       {/* Version Details */}
@@ -559,5 +571,28 @@ const styles = StyleSheet.create({
   sliderLabelTextActive: {
     color: '#10B981',
     fontWeight: '800',
+  },
+  disclaimerCard: {
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    padding: 14,
+    marginVertical: 12,
+  },
+  disclaimerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  disclaimerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    lineHeight: 16,
   },
 });
