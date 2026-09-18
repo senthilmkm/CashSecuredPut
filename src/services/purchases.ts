@@ -85,10 +85,13 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
   try {
     await initializePurchases();
     const offerings = await Purchases.getOfferings();
+    
     if (offerings && offerings.current !== null && offerings.current.availablePackages.length > 0) {
-      const pkg = offerings.current.availablePackages.find((p: any) => {
-        const prodId = p.product.identifier.toLowerCase();
-        const pkgId = p.identifier.toLowerCase();
+      console.log('[Purchases] Available packages:', offerings.current.availablePackages.map((p: any) => p.identifier));
+      
+      let pkg = offerings.current.availablePackages.find((p: any) => {
+        const prodId = (p.product?.identifier || '').toLowerCase();
+        const pkgId = (p.identifier || '').toLowerCase();
         const target = planId.toLowerCase();
 
         if (prodId === target || pkgId === target) return true;
@@ -99,12 +102,20 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
         return false;
       });
 
+      // Fallback to first available package in current offering if exact match wasn't flagged
+      if (!pkg && offerings.current.availablePackages.length > 0) {
+        pkg = offerings.current.availablePackages[0];
+      }
+
       if (pkg) {
+        console.log('[Purchases] Triggering native purchasePackage for:', pkg.identifier);
         const { customerInfo } = await Purchases.purchasePackage(pkg);
         const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
         await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
         return isActive;
       }
+    } else {
+      console.warn('[Purchases] No current offerings or available packages returned by RevenueCat.');
     }
   } catch (error: any) {
     if (error?.userCancelled || error?.message === 'USER_CANCELLED') {
