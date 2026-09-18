@@ -14,8 +14,12 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": [
+          "coveredprofit",
           "coveredprofit"
         ]
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
     "android": {
@@ -52,6 +56,9 @@
       "eas": {
         "projectId": "d8782e5d-cf1e-4487-83a5-47e1b7f6941a"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d8782e5d-cf1e-4487-83a5-47e1b7f6941a"
     }
   }
 }
