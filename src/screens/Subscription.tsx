@@ -35,7 +35,11 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
       }
     } catch (error: any) {
       if (error.message !== 'USER_CANCELLED') {
-        Alert.alert('Trial Activation Failed', error.message || 'Unable to activate trial. Please try again.');
+        const isConfigError = error.message?.includes('configuration') || error.message?.includes('Offerings') || error.message?.includes('products');
+        const userMsg = isConfigError
+          ? 'Subscription offerings are currently being initialized in App Store Connect. Please verify your App Store Connect subscription products and try again.'
+          : (error.message || 'Unable to activate trial. Please try again.');
+        Alert.alert('Trial Activation Info', userMsg);
       }
     } finally {
       setLoading(false);
