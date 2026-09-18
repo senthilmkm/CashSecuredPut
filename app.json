@@ -14,9 +14,6 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": [
-          "coveredprofit",
-          "coveredprofit",
-          "coveredprofit",
           "coveredprofit"
         ]
       },
