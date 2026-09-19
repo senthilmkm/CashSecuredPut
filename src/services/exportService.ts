@@ -35,7 +35,7 @@ export function generateTradesCSV(trades: CSPTrade[], history: CSPTrade[] = []):
     (t.strikePrice - t.premium).toFixed(2),
     t.dte,
     t.expirationDate,
-    t.dateAdded ? new Date(t.dateAdded).toISOString().split('T')[0] : '',
+    t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '',
   ]);
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
