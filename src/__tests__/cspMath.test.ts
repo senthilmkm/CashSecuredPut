@@ -119,6 +119,15 @@ export function runCSPMathTests() {
   assert(decaySeries[0].value === 5.00, 'Day 0 value is initial premium ($5.00)');
   assert(decaySeries[decaySeries.length - 1].value === 0, 'Final day value decays to 0');
 
+  // Test 7: Greeks & Probability of Profit (POP) Math Engine
+  assert(stdRes.greeks !== undefined, 'Greeks metrics attached to CSP metrics');
+  if (stdRes.greeks) {
+    assert(stdRes.greeks.delta < 0, 'Put delta is negative (e.g., -0.22)');
+    assert(stdRes.greeks.probabilityOfProfit > 50, 'OTM CSP probability of profit is > 50%');
+    assert(stdRes.greeks.probabilityAssignment < 50, 'OTM CSP assignment probability is < 50%');
+    assert(!isNaN(stdRes.greeks.thetaPerDay), 'Daily theta decay is a valid number');
+  }
+
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
     process.exit(1);

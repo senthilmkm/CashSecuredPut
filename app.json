@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CashSecuredProfit",
+    "name": "CashSecured Put & Wheel Suite",
     "slug": "CashSecuredProfit",
     "scheme": "cashsecuredprofit",
     "version": "1.0.0",
@@ -10,12 +10,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.senthil.CashSecuredProfit",
-      "buildNumber": "1",
+      "buildNumber": "6",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": [
-          "coveredprofit"
-        ]
+        "ITSAppUsesNonExemptEncryption": false
       },
       "runtimeVersion": {
         "policy": "appVersion"
@@ -23,7 +20,7 @@
     },
     "android": {
       "package": "com.senthil930.cashsecuredprofit",
-      "versionCode": 1,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#0b0f19",
         "foregroundImage": "./assets/android-icon-foreground.png",

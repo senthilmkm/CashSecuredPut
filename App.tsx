@@ -9,12 +9,14 @@ import {
   Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Search, Briefcase, RefreshCw, Settings as SettingsIcon, Crown, Sparkles } from 'lucide-react-native';
+import { Search, Briefcase, RefreshCw, Settings as SettingsIcon, Crown, Sparkles, RotateCcw, BookOpen } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { useAppStorage } from './src/hooks/useAppStorage';
 import Calculator from './src/screens/Calculator';
 import ActiveTrades from './src/screens/ActiveTrades';
 import RollSimulator from './src/screens/RollSimulator';
+import WheelHub from './src/screens/WheelHub';
+import GuideCenter from './src/screens/GuideCenter';
 import Settings from './src/screens/Settings';
 import Subscription from './src/screens/Subscription';
 
@@ -29,7 +31,7 @@ Notifications.setNotificationHandler({
 });
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'analyzer' | 'portfolio' | 'roll' | 'settings'>('analyzer');
+  const [currentTab, setCurrentTab] = useState<'analyzer' | 'wheel' | 'portfolio' | 'guides' | 'roll' | 'settings'>('analyzer');
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [activeRollData, setActiveRollData] = useState<any>(null);
 
@@ -108,7 +110,7 @@ export default function App() {
       {/* Top App Header with Trial Status */}
       <View style={styles.topHeader}>
         <View style={styles.headerTitleRow}>
-          <Text style={styles.headerTitle}>CashSecuredProfit</Text>
+          <Text style={styles.headerTitle}>CashSecured Put & Wheel</Text>
 
           <TouchableOpacity onPress={() => !isPremium && setShowPaywall(true)} activeOpacity={0.8}>
             {isPremium ? (
@@ -143,6 +145,13 @@ export default function App() {
           />
         )}
 
+        {currentTab === 'wheel' && (
+          <WheelHub
+            onOpenPaywall={() => setShowPaywall(true)}
+            isPremium={hasProAccess}
+          />
+        )}
+
         {currentTab === 'portfolio' && (
           <ActiveTrades
             trades={trades}
@@ -153,6 +162,10 @@ export default function App() {
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
           />
+        )}
+
+        {currentTab === 'guides' && (
+          <GuideCenter />
         )}
 
         {currentTab === 'roll' && (
@@ -185,8 +198,16 @@ export default function App() {
           style={styles.tabItem}
           onPress={() => setCurrentTab('analyzer')}
         >
-          <Search color={currentTab === 'analyzer' ? '#10B981' : '#64748B'} size={22} />
+          <Search color={currentTab === 'analyzer' ? '#10B981' : '#64748B'} size={20} />
           <Text style={[styles.tabLabel, currentTab === 'analyzer' && styles.tabLabelActive]}>Analyzer</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => setCurrentTab('wheel')}
+        >
+          <RotateCcw color={currentTab === 'wheel' ? '#10B981' : '#64748B'} size={20} />
+          <Text style={[styles.tabLabel, currentTab === 'wheel' && styles.tabLabelActive]}>Wheel Suite</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -194,7 +215,7 @@ export default function App() {
           onPress={() => setCurrentTab('portfolio')}
         >
           <View>
-            <Briefcase color={currentTab === 'portfolio' ? '#10B981' : '#64748B'} size={22} />
+            <Briefcase color={currentTab === 'portfolio' ? '#10B981' : '#64748B'} size={20} />
             {trades.length > 0 && (
               <View style={styles.tabBadge}>
                 <Text style={styles.tabBadgeText}>{trades.length}</Text>
@@ -206,9 +227,17 @@ export default function App() {
 
         <TouchableOpacity
           style={styles.tabItem}
+          onPress={() => setCurrentTab('guides')}
+        >
+          <BookOpen color={currentTab === 'guides' ? '#10B981' : '#64748B'} size={20} />
+          <Text style={[styles.tabLabel, currentTab === 'guides' && styles.tabLabelActive]}>Masterclass</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
           onPress={() => setCurrentTab('roll')}
         >
-          <RefreshCw color={currentTab === 'roll' ? '#10B981' : '#64748B'} size={22} />
+          <RefreshCw color={currentTab === 'roll' ? '#10B981' : '#64748B'} size={20} />
           <Text style={[styles.tabLabel, currentTab === 'roll' && styles.tabLabelActive]}>Roll Sim</Text>
         </TouchableOpacity>
 
@@ -216,7 +245,7 @@ export default function App() {
           style={styles.tabItem}
           onPress={() => setCurrentTab('settings')}
         >
-          <SettingsIcon color={currentTab === 'settings' ? '#10B981' : '#64748B'} size={22} />
+          <SettingsIcon color={currentTab === 'settings' ? '#10B981' : '#64748B'} size={20} />
           <Text style={[styles.tabLabel, currentTab === 'settings' && styles.tabLabelActive]}>Settings</Text>
         </TouchableOpacity>
       </View>

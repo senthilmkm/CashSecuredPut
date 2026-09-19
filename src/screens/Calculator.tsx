@@ -18,9 +18,11 @@ import {
   Crown,
   RefreshCw,
   Sparkles,
+  Target,
 } from 'lucide-react-native';
 import { calculateCSPMetrics, CSPTradeMetrics } from '../services/cspMath';
 import { getMarketQuote, getPutOptionChain, CSPOptionContract } from '../services/publicApi';
+import PayoffChart from '../components/PayoffChart';
 
 interface CalculatorProps {
   onSaveTrade: (tradeData: any) => Promise<{ success: boolean; paywallTriggered?: boolean }>;
@@ -198,7 +200,48 @@ export default function Calculator({
                 <Text style={styles.metricSub} numberOfLines={1}>{metrics.effectiveDiscountPercent}% discount</Text>
               </View>
             </View>
+
+            {/* Delta & Probability of Profit Banner */}
+            {metrics.greeks && (
+              <View style={styles.greeksBar}>
+                <View style={styles.greekItem}>
+                  <Text style={styles.greekLabel}>Delta</Text>
+                  <Text style={styles.greekVal}>{metrics.greeks.delta}</Text>
+                </View>
+
+                <View style={styles.greekDivider} />
+
+                <View style={styles.greekItem}>
+                  <Text style={styles.greekLabel}>Prob of Profit (POP)</Text>
+                  <Text style={styles.greekValSuccess}>{metrics.greeks.probabilityOfProfit}%</Text>
+                </View>
+
+                <View style={styles.greekDivider} />
+
+                <View style={styles.greekItem}>
+                  <Text style={styles.greekLabel}>Prob Assignment</Text>
+                  <Text style={metrics.greeks.probabilityAssignment > 30 ? styles.greekValDanger : styles.greekVal}>{metrics.greeks.probabilityAssignment}%</Text>
+                </View>
+
+                <View style={styles.greekDivider} />
+
+                <View style={styles.greekItem}>
+                  <Text style={styles.greekLabel}>Time Decay ($\theta$)</Text>
+                  <Text style={styles.greekVal}>+${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/day</Text>
+                </View>
+              </View>
+            )}
           </View>
+        )}
+
+        {/* 1.5 INTERACTIVE EXPIRATION PAYOFF CHART */}
+        {metrics && (
+          <PayoffChart
+            stockPrice={parseFloat(stockPrice) || 0}
+            strikePrice={parseFloat(strikePrice) || 0}
+            premium={parseFloat(premium) || 0}
+            contracts={parsedContracts}
+          />
         )}
 
         {/* 2. SEARCH & PARAMETERS CARD */}
@@ -607,5 +650,47 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '700',
     fontSize: 14.5,
+  },
+  greeksBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0B0F19',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  greekItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  greekLabel: {
+    fontSize: 9.5,
+    color: '#64748B',
+    marginBottom: 2,
+    fontWeight: '600',
+  },
+  greekVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  greekValSuccess: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  greekValDanger: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#EF4444',
+  },
+  greekDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: '#1E293B',
   },
 });

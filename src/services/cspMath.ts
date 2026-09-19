@@ -1,4 +1,4 @@
-﻿// Cash-Secured Put (CSP) Scoring & Calculations Service
+import { calculateCSPGreeks, CSPGreeksAndProbabilities } from './greeksMath';
 
 export interface CSPTradeMetrics {
   collateralRequired: number;       // Strike Price * 100 * Contracts
@@ -16,6 +16,7 @@ export interface CSPTradeMetrics {
   recommendationType: 'success' | 'warning' | 'danger';
   treasuryBenchmarkYield: number;   // e.g., 5.0% risk-free rate comparison
   yieldSpread: number;              // APR - Treasury Benchmark
+  greeks?: CSPGreeksAndProbabilities;
 }
 
 export function calculateCSPMetrics(params: {
@@ -168,6 +169,13 @@ export function calculateCSPMetrics(params: {
     }
   }
 
+  const greeks = calculateCSPGreeks({
+    stockPrice: validStock,
+    strikePrice: validStrike,
+    premium: validPremium,
+    dte: validDte,
+  });
+
   return {
     collateralRequired,
     netPremium,
@@ -184,6 +192,7 @@ export function calculateCSPMetrics(params: {
     recommendationType,
     treasuryBenchmarkYield: treasuryRate,
     yieldSpread: parseFloat(yieldSpread.toFixed(2)),
+    greeks,
   };
 }
 

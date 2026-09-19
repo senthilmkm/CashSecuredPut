@@ -27,8 +27,10 @@ import {
   Copy,
   X,
   ArrowRight,
+  RotateCcw,
 } from 'lucide-react-native';
 import { CSPTrade } from '../hooks/useAppStorage';
+import { exportPortfolioPDF, generateTradesCSV } from '../services/exportService';
 
 interface ActiveTradesProps {
   trades: CSPTrade[];
@@ -39,8 +41,6 @@ interface ActiveTradesProps {
   onOpenPaywall: () => void;
   isPremium: boolean;
 }
-
-const COVERED_PROFIT_APP_STORE_URL = 'https://apps.apple.com/app/id6788692802';
 
 export default function ActiveTrades({
   trades,
@@ -80,20 +80,10 @@ export default function ActiveTrades({
     setExportModalVisible(true);
   };
 
-  const handleLaunchCoveredProfit = async () => {
-    if (!exportData) return;
-    const deepLinkUrl = `coveredprofit://importTrade?ticker=${exportData.ticker}&costBasis=${exportData.costBasis}&shares=${exportData.shares}`;
-    
-    try {
-      // Attempt direct launch into CoveredProfit app first
-      await Linking.openURL(deepLinkUrl);
-    } catch (e) {
-      // CoveredProfit app is not installed on device -> Fallback to App Store!
-      try {
-        await Linking.openURL(COVERED_PROFIT_APP_STORE_URL);
-      } catch (err) {
-        Alert.alert('App Store Error', 'Could not open CoveredProfit or App Store.');
-      }
+  const handleExportPDF = async () => {
+    const success = await exportPortfolioPDF(trades, history);
+    if (success) {
+      Alert.alert('Report Generated', 'PDF Portfolio Report created successfully.');
     }
   };
 
@@ -167,6 +157,14 @@ export default function ActiveTrades({
           </View>
         </View>
       )}
+
+      {/* Export Report Bar */}
+      <View style={styles.exportBar}>
+        <TouchableOpacity style={styles.exportPdfBtn} onPress={handleExportPDF} activeOpacity={0.85}>
+          <Share2 size={14} color="#FFF" style={{ marginRight: 6 }} />
+          <Text style={styles.exportPdfBtnText}>Export Portfolio PDF / CSV Report</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Free Tier Limit Warning Banner */}
       {!isPremium && trades.length >= 3 && (
@@ -403,10 +401,10 @@ export default function ActiveTrades({
                   <Text style={styles.costBoxSub}>Ready to sell Covered Calls</Text>
                 </View>
 
-                <TouchableOpacity style={styles.launchBtn} onPress={handleLaunchCoveredProfit} activeOpacity={0.85}>
+                <TouchableOpacity style={styles.launchBtn} onPress={() => setExportModalVisible(false)} activeOpacity={0.85}>
                   <LinearGradient colors={['#10B981', '#059669']} style={styles.launchGradient}>
-                    <ExternalLink color="#FFF" size={18} style={{ marginRight: 8 }} />
-                    <Text style={styles.launchBtnText}>Open CoveredProfit App</Text>
+                    <RotateCcw color="#FFF" size={18} style={{ marginRight: 8 }} />
+                    <Text style={styles.launchBtnText}>Manage in Wheel Suite Tab</Text>
                   </LinearGradient>
                 </TouchableOpacity>
 
@@ -779,5 +777,23 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontWeight: '700',
     fontSize: 14,
+  },
+  exportBar: {
+    marginBottom: 10,
+  },
+  exportPdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1E3A8A',
+  },
+  exportPdfBtnText: {
+    color: '#3B82F6',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
