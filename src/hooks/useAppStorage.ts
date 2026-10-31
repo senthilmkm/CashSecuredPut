@@ -54,23 +54,8 @@ export function useAppStorage() {
         AsyncStorage.getItem(STORAGE_KEYS.FIRST_LAUNCH_DATE),
       ]);
 
-      // Initialize First Launch Date if missing
-      let launchDateStr = firstLaunch;
-      if (!launchDateStr) {
-        launchDateStr = new Date().toISOString();
-        await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LAUNCH_DATE, launchDateStr);
-      }
-
-      const launchDate = new Date(launchDateStr);
-      const now = new Date();
-      const diffTime = Math.max(0, now.getTime() - launchDate.getTime());
-      const daysElapsed = diffTime / (1000 * 60 * 60 * 24);
-
-      const trialActive = daysElapsed < TRIAL_DURATION_DAYS;
-      const daysLeft = Math.max(0, Math.ceil(TRIAL_DURATION_DAYS - daysElapsed));
-
-      setIsTrialActive(trialActive);
-      setTrialDaysRemaining(daysLeft);
+      setIsTrialActive(false);
+      setTrialDaysRemaining(0);
 
       if (savedTrades) {
         try { setTrades(JSON.parse(savedTrades)); } catch (e) { setTrades([]); }
@@ -102,8 +87,8 @@ export function useAppStorage() {
     return status;
   };
 
-  // Full Pro access is granted if subscribed OR if 7-day initial app trial is active!
-  const hasProAccess = isPremium || isTrialActive;
+  // Full Pro access is granted exclusively via verified Apple StoreKit / RevenueCat Premium entitlement!
+  const hasProAccess = isPremium;
 
   /**
    * Adds a new trade to active trades portfolio.

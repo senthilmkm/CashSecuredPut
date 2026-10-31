@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,8 +11,14 @@ import {
   Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Crown, Check, X, Shield, RefreshCw, Zap, TrendingUp, Sparkles } from 'lucide-react-native';
-import { purchasePremiumPlan, restorePremiumPurchases } from '../services/purchases';
+import { Crown, X, Shield, RefreshCw, Zap, TrendingUp, Sparkles } from 'lucide-react-native';
+import {
+  purchasePremiumPlan,
+  restorePremiumPurchases,
+  getSubscriptionPlans,
+  AvailablePlans,
+  PRODUCT_IDS,
+} from '../services/purchases';
 
 interface SubscriptionProps {
   onClose: () => void;
@@ -22,25 +28,61 @@ interface SubscriptionProps {
 export default function Subscription({ onClose, onSuccess }: SubscriptionProps) {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   const [loading, setLoading] = useState(false);
+  const [plans, setPlans] = useState<AvailablePlans>({
+    annual: { identifier: PRODUCT_IDS.ANNUAL, priceString: '$39.99' },
+    monthly: { identifier: PRODUCT_IDS.MONTHLY, priceString: '$4.99' },
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadPlans() {
+      try {
+        const available = await getSubscriptionPlans();
+        if (isMounted && (available.annual || available.monthly)) {
+          setPlans(prev => ({
+            annual: available.annual || prev.annual,
+            monthly: available.monthly || prev.monthly,
+          }));
+        }
+      } catch (err) {
+        console.warn('[Subscription] Failed to load subscription plans:', err);
+      }
+    }
+    loadPlans();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handlePurchase = async () => {
     setLoading(true);
     try {
-      const planId = selectedPlan === 'annual' ? 'csp_annual_sub' : 'csp_monthly_sub';
+      const planId = selectedPlan === 'annual' ? PRODUCT_IDS.ANNUAL : PRODUCT_IDS.MONTHLY;
       const success = await purchasePremiumPlan(planId);
       if (success) {
-        Alert.alert('7-Day Free Trial Activated!', 'Welcome to CashSecuredProfit Pro. You have full access for 7 days free of charge.', [
-          { text: 'OK', onPress: () => { onSuccess(); onClose(); } }
-        ]);
+        Alert.alert(
+          'Pro Access Activated!',
+          'Welcome to CashSecuredProfit Pro. You now have full access to unlimited portfolio trades, Wheel Suite, and advanced tools.',
+          [
+            {
+              text: 'Get Started',
+              onPress: () => {
+                onSuccess();
+                onClose();
+              },
+            },
+          ]
+        );
       }
     } catch (error: any) {
-      if (error.message !== 'USER_CANCELLED') {
-        const isConfigError = error.message?.includes('configuration') || error.message?.includes('Offerings') || error.message?.includes('products');
-        const userMsg = isConfigError
-          ? 'Subscription offerings are currently being initialized in App Store Connect. Please verify your App Store Connect subscription products and try again.'
-          : (error.message || 'Unable to activate trial. Please try again.');
-        Alert.alert('Trial Activation Info', userMsg);
+      if (error?.message === 'USER_CANCELLED' || error?.userCancelled) {
+        // User voluntarily dismissed Apple purchase dialog
+        return;
       }
+      Alert.alert(
+        'Unable to Complete Purchase',
+        error?.message || 'Could not complete the purchase with the App Store. Please verify your Apple ID and internet connection, then try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -52,17 +94,26 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
       const restored = await restorePremiumPurchases();
       if (restored) {
         Alert.alert('Purchases Restored', 'Your Pro subscription has been restored.', [
-          { text: 'OK', onPress: () => { onSuccess(); onClose(); } }
+          {
+            text: 'OK',
+            onPress: () => {
+              onSuccess();
+              onClose();
+            },
+          },
         ]);
       } else {
         Alert.alert('No Subscription Found', 'No active Pro subscription was found for your Apple ID.');
       }
     } catch (error: any) {
-      Alert.alert('Restore Error', error.message || 'Failed to restore purchases.');
+      Alert.alert('Restore Error', error?.message || 'Failed to restore purchases.');
     } finally {
       setLoading(false);
     }
   };
+
+  const annualPriceStr = plans.annual?.priceString || '$39.99';
+  const monthlyPriceStr = plans.monthly?.priceString || '$4.99';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -146,9 +197,9 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
             )}
             <View style={styles.planHeader}>
               <Text style={styles.planName}>Annual Pro</Text>
-              <Text style={styles.planPrice}>$39.99<Text style={styles.planPeriod}> / yr</Text></Text>
+              <Text style={styles.planPrice}>{annualPriceStr}<Text style={styles.planPeriod}> / yr</Text></Text>
             </View>
-            <Text style={styles.planSubtext}>7 days free, then $3.33/month ($39.99 billed annually)</Text>
+            <Text style={styles.planSubtext}>7 days free, then {annualPriceStr}/year (billed annually)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -158,9 +209,9 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
           >
             <View style={styles.planHeader}>
               <Text style={styles.planName}>Monthly Pro</Text>
-              <Text style={styles.planPrice}>$4.99<Text style={styles.planPeriod}> / mo</Text></Text>
+              <Text style={styles.planPrice}>{monthlyPriceStr}<Text style={styles.planPeriod}> / mo</Text></Text>
             </View>
-            <Text style={styles.planSubtext}>7 days free, then $4.99/month (billed monthly)</Text>
+            <Text style={styles.planSubtext}>7 days free, then {monthlyPriceStr}/month (billed monthly)</Text>
           </TouchableOpacity>
         </View>
 
@@ -194,7 +245,7 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
 
         {/* Legal Disclaimer & Guideline 3.1.2 Links */}
         <Text style={styles.legalText}>
-          Your 7-day free trial will automatically convert to a paid subscription ($39.99/yr or $4.99/mo) unless cancelled at least 24 hours before trial ends. Payment will be charged to your iTunes Account at confirmation of purchase. Manage or cancel in Apple ID Settings.
+          Your 7-day free trial will automatically convert to a paid subscription ({annualPriceStr}/yr or {monthlyPriceStr}/mo) unless cancelled at least 24 hours before trial ends. Payment will be charged to your Apple ID Account at confirmation of purchase. Manage or cancel anytime in Apple ID Settings.
         </Text>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 12, marginBottom: 8 }}>

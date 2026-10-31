@@ -230,7 +230,7 @@ export default function Settings({
         <View style={{ flex: 1 }}>
           <Text style={styles.premiumTitle}>CashSecuredProfit {isPremium ? 'Pro' : 'Free Tier'}</Text>
           <Text style={styles.premiumDesc}>
-            {isPremium ? 'Unlimited Portfolio Tracking & Pro Tools Active' : '7-Day Free App Trial active. Upgrade for lifetime Pro features.'}
+            {isPremium ? 'Unlimited Portfolio Tracking & Pro Tools Active' : 'Upgrade to Pro for unlimited trades, Wheel Suite & advanced tools.'}
           </Text>
         </View>
         {!isPremium && (
