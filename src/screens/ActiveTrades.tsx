@@ -32,11 +32,15 @@ import {
   RotateCcw,
   LayoutGrid,
   List,
+  TrendingUp,
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CSPTrade } from '../hooks/useAppStorage';
 import { exportPortfolioPDF, exportPortfolioCSV, calculateDaysRemaining } from '../services/exportService';
 import { getMarketQuote } from '../services/publicApi';
 import { checkEarningsRisk } from '../services/earningsService';
+import MonthlyIncomeChart from '../components/MonthlyIncomeChart';
+import { groupTradesByMonth, calculateGoalPacing } from '../services/incomeAnalytics';
 
 interface ActiveTradesProps {
   trades: CSPTrade[];
@@ -59,7 +63,22 @@ export default function ActiveTrades({
   onOpenPaywall,
   isPremium,
 }: ActiveTradesProps) {
-  const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
+  const [viewMode, setViewMode] = useState<'active' | 'history' | 'analytics'>('active');
+  const [annualGoal, setAnnualGoal] = useState<number>(5000);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@CashSecuredProfit:annual_income_goal').then((val) => {
+      if (val) {
+        const parsed = parseFloat(val);
+        if (!isNaN(parsed) && parsed > 0) setAnnualGoal(parsed);
+      }
+    });
+  }, []);
+
+  const handleUpdateGoal = async (newGoal: number) => {
+    setAnnualGoal(newGoal);
+    await AsyncStorage.setItem('@CashSecuredProfit:annual_income_goal', newGoal.toString());
+  };
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'itm' | 'expiring'>('all');
   const [cardLayout, setCardLayout] = useState<'detailed' | 'compact'>('detailed');
   const [exportModalVisible, setExportModalVisible] = useState(false);
@@ -208,7 +227,7 @@ export default function ActiveTrades({
             onPress={() => setViewMode('active')}
             activeOpacity={0.8}
           >
-            <Briefcase size={14} color={viewMode === 'active' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+            <Briefcase size={13} color={viewMode === 'active' ? '#FFF' : '#64748B'} style={{ marginRight: 5 }} />
             <Text style={[styles.segmentText, viewMode === 'active' && styles.segmentTextActive]}>
               Active ({trades.length})
             </Text>
@@ -219,9 +238,20 @@ export default function ActiveTrades({
             onPress={() => setViewMode('history')}
             activeOpacity={0.8}
           >
-            <Clock size={14} color={viewMode === 'history' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+            <Clock size={13} color={viewMode === 'history' ? '#FFF' : '#64748B'} style={{ marginRight: 5 }} />
             <Text style={[styles.segmentText, viewMode === 'history' && styles.segmentTextActive]}>
               History ({history.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, viewMode === 'analytics' && styles.segmentBtnActive]}
+            onPress={() => setViewMode('analytics')}
+            activeOpacity={0.8}
+          >
+            <TrendingUp size={13} color={viewMode === 'analytics' ? '#FFF' : '#64748B'} style={{ marginRight: 4 }} />
+            <Text style={[styles.segmentText, viewMode === 'analytics' && styles.segmentTextActive]}>
+              Paycheck 📊
             </Text>
           </TouchableOpacity>
         </View>
@@ -239,24 +269,44 @@ export default function ActiveTrades({
           )}
         </TouchableOpacity>
       </View>
-      {/* Overview Summary Cards (Active vs History) */}
+      {/* Overview Summary Cards (Active vs History vs Analytics) */}
       {viewMode === 'active' ? (
-        <View style={styles.overviewGrid}>
-          <View style={styles.overviewCard}>
-            <Text style={styles.overviewLabel}>Locked Collateral</Text>
-            <Text style={styles.overviewValPrimary}>${totalCollateral.toLocaleString()}</Text>
-            <Text style={styles.overviewSub}>{trades.length} Active Position{trades.length !== 1 ? 's' : ''}</Text>
+        <>
+          <View style={styles.overviewGrid}>
+            <View style={styles.overviewCard}>
+              <Text style={styles.overviewLabel}>Locked Collateral</Text>
+              <Text style={styles.overviewValPrimary}>${totalCollateral.toLocaleString()}</Text>
+              <Text style={styles.overviewSub}>{trades.length} Active Position{trades.length !== 1 ? 's' : ''}</Text>
+            </View>
+
+            <View style={styles.overviewCard}>
+              <Text style={styles.overviewLabel}>Active Net Premium</Text>
+              <Text style={styles.overviewValSuccess}>+${totalPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+              <Text style={styles.overviewSub}>
+                Avg ROC: {totalCollateral > 0 ? ((totalPremium / totalCollateral) * 100).toFixed(2) : '0.00'}%
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.overviewCard}>
-            <Text style={styles.overviewLabel}>Active Net Premium</Text>
-            <Text style={styles.overviewValSuccess}>+${totalPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-            <Text style={styles.overviewSub}>
-              Avg ROC: {totalCollateral > 0 ? ((totalPremium / totalCollateral) * 100).toFixed(2) : '0.00'}%
-            </Text>
-          </View>
-        </View>
-      ) : (
+          {/* Quick Paycheck Teaser Banner */}
+          <TouchableOpacity
+            style={styles.incomeQuickBanner}
+            onPress={() => setViewMode('analytics')}
+            activeOpacity={0.85}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TrendingUp size={14} color="#10B981" style={{ marginRight: 8 }} />
+              <Text style={styles.incomeQuickBannerText}>
+                Lifetime Options Paycheck: +${totalLifetimeRealized.toFixed(2)}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.incomeQuickBannerLink}>View Goals</Text>
+              <ArrowRight size={12} color="#10B981" style={{ marginLeft: 3 }} />
+            </View>
+          </TouchableOpacity>
+        </>
+      ) : viewMode === 'history' ? (
         <View style={styles.overviewGrid}>
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Lifetime Realized Income</Text>
@@ -272,7 +322,7 @@ export default function ActiveTrades({
             </Text>
           </View>
         </View>
-      )}
+      ) : null}
 
       {/* Export Report Bar */}
       <View style={styles.exportBar}>
@@ -289,7 +339,7 @@ export default function ActiveTrades({
       </View>
 
       {/* Free Tier Limit Warning Banner */}
-      {!isPremium && trades.length >= 3 && (
+      {!isPremium && trades.length >= 3 && viewMode === 'active' && (
         <TouchableOpacity style={styles.paywallBanner} onPress={onOpenPaywall} activeOpacity={0.85}>
           <LinearGradient colors={['#7C3AED', '#4C1D95']} style={styles.bannerGradient}>
             <Crown color="#F59E0B" size={24} style={{ marginRight: 12 }} />
@@ -301,18 +351,69 @@ export default function ActiveTrades({
         </TouchableOpacity>
       )}
 
-      {/* Active vs History Lists */}
-      {viewMode === 'history' ? (
-        history.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Clock color="#475569" size={48} style={{ marginBottom: 12 }} />
-            <Text style={styles.emptyTitle}>No Trade History Yet</Text>
-            <Text style={styles.emptySub}>
-              Positions marked as expired, assigned, or closed early will appear here automatically.
+      {/* Tab Views: Analytics vs History vs Active */}
+      {viewMode === 'analytics' ? (
+        <View style={{ marginTop: 4 }}>
+          <MonthlyIncomeChart
+            history={history}
+            isPremium={isPremium}
+            onOpenPaywall={onOpenPaywall}
+            annualGoal={annualGoal}
+            onUpdateGoal={handleUpdateGoal}
+          />
+
+          {/* Analytics Key Metrics Grid */}
+          <View style={styles.analyticsStatsGrid}>
+            <View style={styles.analyticsStatCard}>
+              <Text style={styles.analyticsStatLabel}>Lifetime Realized</Text>
+              <Text style={styles.analyticsStatValGreen}>+${totalLifetimeRealized.toFixed(2)}</Text>
+              <Text style={styles.analyticsStatSub}>{history.length} Closed Trades</Text>
+            </View>
+
+            <View style={styles.analyticsStatCard}>
+              <Text style={styles.analyticsStatLabel}>Win Rate (% Expired)</Text>
+              <Text style={styles.analyticsStatValPrimary}>
+                {history.length > 0
+                  ? `${Math.round((history.filter(h => h.status === 'expired_worthless').length / history.length) * 100)}%`
+                  : '100%'}
+              </Text>
+              <Text style={styles.analyticsStatSub}>
+                {history.filter(h => h.status === 'expired_worthless').length} Expired Worthless
+              </Text>
+            </View>
+          </View>
+
+          {/* Strategic Income Advice Card */}
+          <View style={styles.tipCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <Crown size={15} color="#F59E0B" style={{ marginRight: 6 }} />
+              <Text style={styles.tipTitle}>Wheel Income Rule #1</Text>
+            </View>
+            <Text style={styles.tipDesc}>
+              Consistent options sellers target 30–45 DTE puts at 0.20–0.30 Delta. This maximizes theta time decay while keeping collateral safety buffer over 80%.
             </Text>
           </View>
-        ) : (
-          history.map((hTrade) => {
+        </View>
+      ) : viewMode === 'history' ? (
+        <>
+          <MonthlyIncomeChart
+            history={history}
+            isPremium={isPremium}
+            onOpenPaywall={onOpenPaywall}
+            annualGoal={annualGoal}
+            onUpdateGoal={handleUpdateGoal}
+          />
+
+          {history.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Clock color="#475569" size={48} style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyTitle}>No Trade History Yet</Text>
+              <Text style={styles.emptySub}>
+                Positions marked as expired, assigned, or closed early will appear here automatically.
+              </Text>
+            </View>
+          ) : (
+            history.map((hTrade) => {
             const hPrem = hTrade.cumulativePremium !== undefined ? hTrade.cumulativePremium : hTrade.premium;
             const netIncome = (hPrem * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
             const effBasis = Math.max(0, hTrade.strikePrice - (hTrade.cumulativeCostBasisCredit || hPrem)).toFixed(2);
@@ -375,7 +476,8 @@ export default function ActiveTrades({
               </View>
             );
           })
-        )
+        )}
+        </>
       ) : (
         <>
           {/* ITM Risk Alert Banner */}
@@ -1159,5 +1261,81 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '700',
     marginTop: 2,
+  },
+  incomeQuickBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#064E3B',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#047857',
+  },
+  incomeQuickBannerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D1FAE5',
+  },
+  incomeQuickBannerLink: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6EE7B7',
+  },
+  analyticsStatsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  analyticsStatCard: {
+    width: '48%',
+    backgroundColor: '#161E2E',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  analyticsStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginBottom: 4,
+  },
+  analyticsStatValGreen: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#10B981',
+    marginBottom: 2,
+  },
+  analyticsStatValPrimary: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#3B82F6',
+    marginBottom: 2,
+  },
+  analyticsStatSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  tipCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginBottom: 20,
+  },
+  tipTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#F59E0B',
+  },
+  tipDesc: {
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 18,
   },
 });

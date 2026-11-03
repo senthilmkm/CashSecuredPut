@@ -3,6 +3,7 @@ import { calculateCSPMetrics, calculateRollCSP, calculateCSPTimeDecay } from '..
 import { pruneHistoryByRetention, CSPTrade } from '../services/storageUtils';
 import { checkEarningsRisk } from '../services/earningsService';
 import { isCustomerEntitled } from '../services/entitlementUtils';
+import { groupTradesByMonth, calculateGoalPacing } from '../services/incomeAnalytics';
 
 export function runCSPMathTests() {
   let passed = 0;
@@ -271,6 +272,75 @@ export function runCSPMathTests() {
     totalLifetimeIncome === 670,
     'Lifetime history income sums Leg 1 ($170) + Leg 2 ($500) = $670 exactly with zero double counting'
   );
+
+  // Test 13: Monthly Income Paycheck Aggregation
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+
+  const mockAnalyticsHistory: CSPTrade[] = [
+    {
+      id: 'h1',
+      ticker: 'AAPL',
+      stockPrice: 150,
+      strikePrice: 140,
+      premium: 4.50,
+      contracts: 1,
+      commissions: 1.00,
+      expirationDate: '2026-11-20',
+      dte: 10,
+      status: 'expired_worthless',
+      createdAt: new Date(currentYear, currentMonth, 5).toISOString(),
+    },
+    {
+      id: 'h2',
+      ticker: 'MSFT',
+      stockPrice: 420,
+      strikePrice: 400,
+      premium: 6.00,
+      contracts: 2,
+      commissions: 2.00,
+      expirationDate: '2026-11-25',
+      dte: 15,
+      status: 'expired_worthless',
+      createdAt: new Date(currentYear, currentMonth, 12).toISOString(),
+    },
+    {
+      id: 'h3',
+      ticker: 'NVDA',
+      stockPrice: 130,
+      strikePrice: 125,
+      premium: 3.00,
+      contracts: 1,
+      commissions: 0.50,
+      expirationDate: '2026-10-15',
+      dte: 20,
+      status: 'assigned',
+      createdAt: new Date(currentYear, currentMonth - 1, 10).toISOString(),
+    },
+  ];
+
+  const buckets = groupTradesByMonth(mockAnalyticsHistory, 6);
+  assert(buckets.length === 6, 'groupTradesByMonth returns requested 6 month chronological timeline');
+
+  const thisMonthBucket = buckets[buckets.length - 1];
+  const expectedThisMonthNet = (4.50 * 100 - 1.00) + (6.00 * 200 - 2.00); // 449 + 1198 = 1647
+  assert(thisMonthBucket.netIncome === expectedThisMonthNet, `Current month net income = $${expectedThisMonthNet}`);
+  assert(thisMonthBucket.tradeCount === 2, 'Current month trade count = 2');
+  assert(thisMonthBucket.winRatePercent === 100, 'Current month 2/2 expired worthless = 100% win rate');
+
+  const prevMonthBucket = buckets[buckets.length - 2];
+  const expectedPrevMonthNet = 3.00 * 100 - 0.50; // 299.50
+  assert(prevMonthBucket.netIncome === expectedPrevMonthNet, `Previous month net income = $${expectedPrevMonthNet}`);
+  assert(prevMonthBucket.assignedCount === 1, 'Previous month assigned count = 1');
+  assert(prevMonthBucket.winRatePercent === 0, 'Previous month assigned trade = 0% win rate');
+
+  // Test 14: Annual Cash Flow Goal Pacing
+  const pacingRes = calculateGoalPacing(buckets, 5000);
+  const totalExpectedYtd = expectedThisMonthNet + expectedPrevMonthNet; // 1946.50
+  assert(pacingRes.totalYtd === totalExpectedYtd, `Total YTD matches summed monthly buckets ($${totalExpectedYtd})`);
+  assert(pacingRes.percentOfGoal > 0, `Percent of annual goal > 0% (${pacingRes.percentOfGoal}%)`);
+  assert(pacingRes.projectedAnnual > 0, `Projected annual run rate > 0 ($${pacingRes.projectedAnnual})`);
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
