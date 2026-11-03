@@ -217,6 +217,7 @@ export function calculateRollCSP(params: {
   newStrike: number;
   newPremiumPerContract: number;  // Premium per share collected for new put
   newContracts?: number;
+  originalPremiumPerShare?: number; // Optional initial premium received on original put leg
 }): RollSimulationResult {
   const {
     currentStrike,
@@ -225,6 +226,7 @@ export function calculateRollCSP(params: {
     newStrike,
     newPremiumPerContract,
     newContracts = currentContracts,
+    originalPremiumPerShare = 0,
   } = params;
 
   const validCurrentContracts = Math.max(1, currentContracts);
@@ -238,9 +240,10 @@ export function calculateRollCSP(params: {
   const newCollateralRequired = newStrike * 100 * validNewContracts;
   const collateralDifference = newCollateralRequired - currentCollateral;
 
-  // New effective cost basis = New Strike - (New Premium - Close Cost)
-  const netPerSharePremium = newPremiumPerContract - closeCostPerContract;
-  const newEffectiveCostBasis = Math.max(0, newStrike - netPerSharePremium);
+  // New effective cost basis = New Strike - (Original Premium + New Premium - Close Cost)
+  const netRollCreditPerShare = newPremiumPerContract - closeCostPerContract;
+  const totalCumulativePremium = Math.max(0, (originalPremiumPerShare || 0) + netRollCreditPerShare);
+  const newEffectiveCostBasis = Math.max(0, newStrike - totalCumulativePremium);
 
   return {
     closeDebitTotal: parseFloat(closeDebitTotal.toFixed(2)),

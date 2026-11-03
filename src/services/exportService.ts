@@ -1,6 +1,14 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { CSPTrade } from '../hooks/useAppStorage';
+
+export function calculateDaysRemaining(expDate?: string, fallbackDte?: number): number {
+  if (!expDate) return fallbackDte || 0;
+  const target = new Date(expDate + 'T23:59:59').getTime();
+  const diff = target - Date.now();
+  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+}
 
 /**
  * Converts trades array into CSV text string
@@ -16,29 +24,63 @@ export function generateTradesCSV(trades: CSPTrade[], history: CSPTrade[] = []):
     'Collateral ($)',
     'Net Income ($)',
     'Effective Cost Basis ($)',
-    'DTE',
+    'DTE Left',
     'Expiration Date',
     'Date Logged',
   ];
 
   const allTrades = [...trades, ...history];
 
-  const rows = allTrades.map((t) => [
-    t.ticker,
-    t.status || 'active',
-    t.stockPrice.toFixed(2),
-    t.strikePrice.toFixed(2),
-    t.premium.toFixed(2),
-    t.contracts,
-    (t.strikePrice * 100 * t.contracts).toFixed(2),
-    ((t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions).toFixed(2),
-    (t.strikePrice - t.premium).toFixed(2),
-    t.dte,
-    t.expirationDate,
-    t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '',
-  ]);
+  const rows = allTrades.map((t) => {
+    const prem = t.cumulativePremium || t.premium;
+    const effBasis = Math.max(0, t.strikePrice - prem);
+    const dteLeft = calculateDaysRemaining(t.expirationDate, t.dte);
+
+    return [
+      t.ticker,
+      t.status || 'active',
+      t.stockPrice.toFixed(2),
+      t.strikePrice.toFixed(2),
+      t.premium.toFixed(2),
+      t.contracts,
+      (t.strikePrice * 100 * t.contracts).toFixed(2),
+      (prem * 100 * t.contracts - t.commissions).toFixed(2),
+      effBasis.toFixed(2),
+      dteLeft,
+      t.expirationDate,
+      t.createdAt ? new Date(t.createdAt).toISOString().split('T')[0] : '',
+    ];
+  });
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+}
+
+/**
+ * Exports trades as CSV and presents native iOS share sheet
+ */
+export async function exportPortfolioCSV(trades: CSPTrade[], history: CSPTrade[] = []): Promise<boolean> {
+  try {
+    const csvData = generateTradesCSV(trades, history);
+    const filename = `csp_portfolio_${new Date().toISOString().split('T')[0]}.csv`;
+    const targetUri = `${FileSystem.cacheDirectory}${filename}`;
+
+    await FileSystem.writeAsStringAsync(targetUri, csvData, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(targetUri, {
+        mimeType: 'text/csv',
+        dialogTitle: 'Export Portfolio CSV',
+        UTI: 'public.comma-separated-values-text',
+      });
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('CSV export failed:', err);
+    return false;
+  }
 }
 
 /**
@@ -52,17 +94,23 @@ export async function exportPortfolioPDF(trades: CSPTrade[], history: CSPTrade[]
 
   const tradeRowsHtml = trades
     .map(
-      (t) => `
+      (t) => {
+        const prem = t.cumulativePremium || t.premium;
+        const effBasis = Math.max(0, t.strikePrice - prem);
+        const dteLeft = calculateDaysRemaining(t.expirationDate, t.dte);
+
+        return `
     <tr>
       <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">${t.ticker}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${t.strikePrice.toFixed(2)} Put</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${t.stockPrice.toFixed(2)}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #10B981; font-weight: bold;">+$${((t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions).toFixed(2)}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${(t.strikePrice - t.premium).toFixed(2)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #10B981; font-weight: bold;">+$${(prem * 100 * t.contracts - t.commissions).toFixed(2)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${effBasis.toFixed(2)}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${(t.strikePrice * 100 * t.contracts).toLocaleString()}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${t.dte} days (${t.expirationDate})</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${dteLeft} days (${t.expirationDate})</td>
     </tr>
-  `
+  `;
+      }
     )
     .join('');
 

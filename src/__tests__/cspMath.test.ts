@@ -1,5 +1,6 @@
 declare const process: any;
 import { calculateCSPMetrics, calculateRollCSP, calculateCSPTimeDecay } from '../services/cspMath';
+import { pruneHistoryByRetention } from '../services/storageUtils';
 
 export function runCSPMathTests() {
   let passed = 0;
@@ -113,6 +114,18 @@ export function runCSPMathTests() {
   assert(rollRes.netCreditOrDebit === 250, 'Net Credit = $250');
   assert(rollRes.isNetCredit === true, 'Roll is Net Credit');
 
+  // Test 5b: Roll with Initial Leg Premium (Cumulative Cost Basis)
+  const rollWithInitial = calculateRollCSP({
+    currentStrike: 140,
+    currentContracts: 1,
+    closeCostPerContract: 4.50,
+    newStrike: 135,
+    newPremiumPerContract: 6.20,
+    originalPremiumPerShare: 5.00,
+  });
+  assert(rollWithInitial.netCreditOrDebit === 170, 'Net credit for roll with initial = $170');
+  assert(rollWithInitial.newEffectiveCostBasis === 128.30, 'Cumulative cost basis incorporates initial premium = $128.30');
+
   // Test 6: Theta Decay Series
   const decaySeries = calculateCSPTimeDecay({ premium: 5.00, dte: 30 });
   assert(decaySeries.length === 11, 'Time decay returns 11 data points');
@@ -127,6 +140,23 @@ export function runCSPMathTests() {
     assert(stdRes.greeks.probabilityAssignment < 50, 'OTM CSP assignment probability is < 50%');
     assert(!isNaN(stdRes.greeks.thetaPerDay), 'Daily theta decay is a valid number');
   }
+
+  // Test 8: Data Retention Pruning
+  const now = Date.now();
+  const mockHistory: any[] = [
+    { id: '1', ticker: 'AAPL', createdAt: new Date(now - 10 * 86400000).toISOString() }, // 10 days old
+    { id: '2', ticker: 'NVDA', createdAt: new Date(now - 45 * 86400000).toISOString() }, // 45 days old
+    { id: '3', ticker: 'TSLA', createdAt: new Date(now - 120 * 86400000).toISOString() }, // 120 days old
+  ];
+
+  const pruned30 = pruneHistoryByRetention(mockHistory, 30);
+  assert(pruned30.length === 1 && pruned30[0].ticker === 'AAPL', 'Pruning to 30 days removes items > 30 days old');
+
+  const pruned90 = pruneHistoryByRetention(mockHistory, 90);
+  assert(pruned90.length === 2, 'Pruning to 90 days preserves AAPL and NVDA, removes TSLA');
+
+  const prunedForever = pruneHistoryByRetention(mockHistory, 9999);
+  assert(prunedForever.length === 3, 'Retention 9999 preserves all historical records indefinitely');
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

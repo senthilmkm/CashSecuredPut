@@ -1,23 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPremiumStatus } from '../services/purchases';
+import { CSPTrade, pruneHistoryByRetention } from '../services/storageUtils';
 
-export interface CSPTrade {
-  id: string;
-  ticker: string;
-  stockPrice: number;
-  strikePrice: number;
-  premium: number;
-  contracts: number;
-  expirationDate: string;
-  dte: number;
-  commissions: number;
-  notes?: string;
-  status: 'active' | 'expired_worthless' | 'assigned' | 'closed_early';
-  createdAt: string;
-  rolledFromId?: string;
-  cumulativePremium?: number;
-}
+export { CSPTrade, pruneHistoryByRetention };
 
 const STORAGE_KEYS = {
   TRADES: '@CashSecuredProfit:trades',
@@ -26,6 +12,7 @@ const STORAGE_KEYS = {
   ALERT_THRESHOLD: '@CashSecuredProfit:alert_threshold',
   IS_PREMIUM: '@CashSecuredProfit:is_premium',
   FIRST_LAUNCH_DATE: '@CashSecuredProfit:first_launch_date',
+  WHEEL: '@csp_wheel_positions_v1',
 };
 
 export const FREE_TIER_MAX_TRADES = 3;
@@ -57,17 +44,28 @@ export function useAppStorage() {
       setIsTrialActive(false);
       setTrialDaysRemaining(0);
 
+      let effectiveRetention = 90;
+      if (savedRetention) {
+        effectiveRetention = parseInt(savedRetention, 10);
+        setRetentionDays(effectiveRetention);
+      }
+      if (savedAlerts) {
+        setExpirationAlertThreshold(parseInt(savedAlerts, 10));
+      }
       if (savedTrades) {
         try { setTrades(JSON.parse(savedTrades)); } catch (e) { setTrades([]); }
       }
       if (savedHistory) {
-        try { setHistory(JSON.parse(savedHistory)); } catch (e) { setHistory([]); }
-      }
-      if (savedRetention) {
-        setRetentionDays(parseInt(savedRetention, 10));
-      }
-      if (savedAlerts) {
-        setExpirationAlertThreshold(parseInt(savedAlerts, 10));
+        try {
+          const parsed = JSON.parse(savedHistory);
+          const pruned = pruneHistoryByRetention(parsed, effectiveRetention);
+          setHistory(pruned);
+          if (pruned.length !== parsed.length) {
+            await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(pruned));
+          }
+        } catch (e) {
+          setHistory([]);
+        }
       }
       setIsPremium(premiumStatus);
     } catch (error) {
@@ -194,6 +192,11 @@ export function useAppStorage() {
   const updateRetentionDays = async (days: number) => {
     setRetentionDays(days);
     await AsyncStorage.setItem(STORAGE_KEYS.RETENTION_DAYS, days.toString());
+    const pruned = pruneHistoryByRetention(history, days);
+    if (pruned.length !== history.length) {
+      setHistory(pruned);
+      await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(pruned));
+    }
   };
 
   const updateExpirationAlertThreshold = async (days: number) => {
@@ -207,6 +210,7 @@ export function useAppStorage() {
     await Promise.all([
       AsyncStorage.removeItem(STORAGE_KEYS.TRADES),
       AsyncStorage.removeItem(STORAGE_KEYS.HISTORY),
+      AsyncStorage.removeItem(STORAGE_KEYS.WHEEL),
     ]);
   };
 

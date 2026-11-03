@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   Modal,
   Platform,
+  Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { Search, Briefcase, RefreshCw, Settings as SettingsIcon, Crown, Sparkles, RotateCcw, BookOpen } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { useAppStorage } from './src/hooks/useAppStorage';
+import { calculateDaysRemaining } from './src/services/exportService';
 import Calculator from './src/screens/Calculator';
 import ActiveTrades from './src/screens/ActiveTrades';
 import RollSimulator from './src/screens/RollSimulator';
@@ -79,12 +82,13 @@ export default function App() {
         if (finalStatus !== 'granted') return;
 
         for (const trade of trades) {
-          if (trade.dte <= expirationAlertThreshold && trade.status === 'active') {
+          const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
+          if (dteLeft <= expirationAlertThreshold && trade.status === 'active') {
             await Notifications.scheduleNotificationAsync({
               identifier: `csp_expiry_${trade.id}`,
               content: {
                 title: `CSP Expiration Alert: ${trade.ticker}`,
-                body: `Your $${trade.strikePrice} ${trade.ticker} Put option expires in ${trade.dte} days! Check position status.`,
+                body: `Your $${trade.strikePrice} ${trade.ticker} Put option expires in ${dteLeft} days! Check position status.`,
               },
               trigger: null,
             });
@@ -103,6 +107,47 @@ export default function App() {
     setCurrentTab('roll');
   };
 
+  const handleTransitionTradeToWheel = async (tradeData: { ticker: string; strike: number; premium: number; shares: number }) => {
+    try {
+      const STORAGE_KEY_WHEEL = '@csp_wheel_positions_v1';
+      const existing = await AsyncStorage.getItem(STORAGE_KEY_WHEEL);
+      const list = existing ? JSON.parse(existing) : [];
+      
+      if (!hasProAccess && list.length >= 1) {
+        setShowPaywall(true);
+        Alert.alert(
+          'Pro Feature Limit',
+          'Free tier allows 1 active Wheel strategy position. Upgrade to CSP Pro to transition unlimited assigned trades into Wheel management.',
+          [
+            { text: 'Unlock Pro', onPress: () => setShowPaywall(true) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+
+      const newWheelPos = {
+        id: Date.now().toString(),
+        ticker: tradeData.ticker,
+        phase: 'assigned_shares' as const,
+        initialStrike: tradeData.strike,
+        initialPutPremium: tradeData.premium,
+        shares: tradeData.shares,
+        assignedDate: new Date().toISOString().split('T')[0],
+        assignedPrice: tradeData.strike,
+        coveredCallsSold: [],
+        notes: `Imported from assigned ${tradeData.ticker} CSP trade`,
+      };
+      
+      const updated = [newWheelPos, ...list];
+      await AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(updated));
+      setCurrentTab('wheel');
+    } catch (e) {
+      console.warn('Failed to transition trade to wheel', e);
+      setCurrentTab('wheel');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
@@ -112,7 +157,7 @@ export default function App() {
         <View style={styles.headerTitleRow}>
           <Text style={styles.headerTitle}>CashSecured Put & Wheel</Text>
 
-          <TouchableOpacity onPress={() => !isPremium && setShowPaywall(true)} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => setShowPaywall(true)} activeOpacity={0.8}>
             {isPremium ? (
               <View style={[styles.tierBadge, styles.badgePro]}>
                 <Crown color="#FFF" size={12} style={{ marginRight: 4 }} />
@@ -159,6 +204,7 @@ export default function App() {
             onUpdateStatus={updateTradeStatus}
             onRemoveTrade={removeTrade}
             onRollTrade={handleOpenRollWithData}
+            onTransitionToWheel={handleTransitionTradeToWheel}
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
           />

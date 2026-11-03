@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -50,7 +50,38 @@ export default function Calculator({
   const [fetchingQuote, setFetchingQuote] = useState(false);
   const [optionChain, setOptionChain] = useState<CSPOptionContract[]>([]);
   const [selectedContract, setSelectedContract] = useState<CSPOptionContract | null>(null);
+  const [selectedExpFilter, setSelectedExpFilter] = useState<string>('all');
   const [metrics, setMetrics] = useState<CSPTradeMetrics | null>(null);
+
+  const quoteRequestId = useRef(0);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Extract unique sorted expiration dates
+  const uniqueExpirations = useMemo(() => {
+    return Array.from(new Set(optionChain.map((c) => c.expiration))).sort();
+  }, [optionChain]);
+
+  // Filter option chain by selected expiration date
+  const displayedContracts = useMemo(() => {
+    if (selectedExpFilter === 'all') return optionChain;
+    return optionChain.filter((c) => c.expiration === selectedExpFilter);
+  }, [optionChain, selectedExpFilter]);
+
+  const handleSelectExpFilter = (exp: string) => {
+    setSelectedExpFilter(exp);
+    if (exp !== 'all') {
+      const expTime = new Date(exp + 'T16:00:00Z').getTime();
+      const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
+      setDte(days.toString());
+    }
+  };
 
   // Re-calculate metrics whenever inputs change
   useEffect(() => {
@@ -85,31 +116,81 @@ export default function Calculator({
       return;
     }
 
+    const reqId = ++quoteRequestId.current;
     setFetchingQuote(true);
     try {
       const quote = await getMarketQuote(cleanSymbol);
+      if (reqId !== quoteRequestId.current || !isMountedRef.current) return;
       setStockPrice(quote.price.toFixed(2));
       
       const targetStrike = Math.round(quote.price * 0.95);
       setStrikePrice(targetStrike.toFixed(2));
 
-      const chain = await getPutOptionChain(cleanSymbol, quote.price);
+      const currentDte = parseInt(dte, 10) || 30;
+      const chain = await getPutOptionChain(cleanSymbol, quote.price, currentDte);
+      if (reqId !== quoteRequestId.current || !isMountedRef.current) return;
       setOptionChain(chain);
 
       if (chain.length > 0) {
-        const nearest = chain.reduce((prev, curr) =>
+        // Pick best matching expiration date to current target DTE
+        const uniqueExps = Array.from(new Set(chain.map((c) => c.expiration))).sort();
+        let bestExp = uniqueExps[0];
+        let minExpDiff = Infinity;
+        for (const exp of uniqueExps) {
+          const expTime = new Date(`${exp}T16:00:00Z`).getTime();
+          const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
+          const diff = Math.abs(days - currentDte);
+          if (diff < minExpDiff) {
+            minExpDiff = diff;
+            bestExp = exp;
+          }
+        }
+        setSelectedExpFilter(bestExp);
+
+        const expContracts = chain.filter((c) => c.expiration === bestExp);
+        const candidateList = expContracts.length > 0 ? expContracts : chain;
+        const nearest = candidateList.reduce((prev, curr) =>
           Math.abs(curr.strike - targetStrike) < Math.abs(prev.strike - targetStrike) ? curr : prev
         );
         if (nearest) {
           setSelectedContract(nearest);
           setStrikePrice(nearest.strike.toFixed(2));
           setPremium(nearest.premium.toFixed(2));
+          if (nearest.expiration) {
+            const expTime = new Date(nearest.expiration + 'T16:00:00Z').getTime();
+            const nowTime = Date.now();
+            const days = Math.max(1, Math.round((expTime - nowTime) / (1000 * 60 * 60 * 24)));
+            setDte(days.toString());
+          }
         }
       }
     } catch (error) {
       // Fallback allowed
     } finally {
-      setFetchingQuote(false);
+      if (reqId === quoteRequestId.current && isMountedRef.current) {
+        setFetchingQuote(false);
+      }
+    }
+  };
+
+  const handleDteChange = (text: string) => {
+    setDte(text);
+    const parsed = parseInt(text, 10);
+    if (!isNaN(parsed) && parsed > 0 && uniqueExpirations.length > 0) {
+      let closestExp = uniqueExpirations[0];
+      let minDiff = Infinity;
+      for (const exp of uniqueExpirations) {
+        const expTime = new Date(`${exp}T16:00:00Z`).getTime();
+        const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
+        const diff = Math.abs(days - parsed);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestExp = exp;
+        }
+      }
+      if (closestExp) {
+        setSelectedExpFilter(closestExp);
+      }
     }
   };
 
@@ -117,6 +198,12 @@ export default function Calculator({
     setSelectedContract(contract);
     setStrikePrice(contract.strike.toFixed(2));
     setPremium(contract.premium.toFixed(2));
+    if (contract.expiration) {
+      const expTime = new Date(contract.expiration + 'T16:00:00Z').getTime();
+      const nowTime = Date.now();
+      const days = Math.max(1, Math.round((expTime - nowTime) / (1000 * 60 * 60 * 24)));
+      setDte(days.toString());
+    }
   };
 
   const handleSavePosition = async () => {
@@ -125,14 +212,19 @@ export default function Calculator({
       return;
     }
 
+    const sStrike = parseFloat(strikePrice);
+    const exactExpiration = (selectedContract && selectedContract.strike === sStrike && selectedContract.expiration)
+      ? selectedContract.expiration
+      : new Date(Date.now() + (parseInt(dte, 10) || 30) * 86400000).toISOString().split('T')[0];
+
     const tradeData = {
       ticker: ticker.trim().toUpperCase(),
       stockPrice: parseFloat(stockPrice),
-      strikePrice: parseFloat(strikePrice),
+      strikePrice: sStrike,
       premium: parseFloat(premium),
-      contracts: parseInt(contracts, 10),
-      dte: parseInt(dte, 10),
-      expirationDate: new Date(Date.now() + (parseInt(dte, 10) || 30) * 86400000).toISOString().split('T')[0],
+      contracts: parseInt(contracts, 10) || 1,
+      dte: parseInt(dte, 10) || 30,
+      expirationDate: exactExpiration,
       commissions: parseFloat(commissions) || 0,
     };
 
@@ -293,7 +385,7 @@ export default function Calculator({
 
             <View style={styles.mCol}>
               <Text style={styles.mLabel}>DTE</Text>
-              <TextInput style={styles.mInput} value={dte} onChangeText={setDte} keyboardType="number-pad" />
+              <TextInput style={styles.mInput} value={dte} onChangeText={handleDteChange} keyboardType="number-pad" />
             </View>
           </View>
 
@@ -308,35 +400,93 @@ export default function Calculator({
         {/* 3. LIVE OPTIONS CHAIN CARD */}
         <View style={styles.chainCard}>
           <View style={styles.chainHeaderRow}>
-            <Text style={styles.cardSectionTitle}>Live Options Chain (Puts)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.cardSectionTitle}>Live Options Chain (Puts)</Text>
+              {optionChain.length > 0 && (
+                <View style={styles.liveBadge}>
+                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                </View>
+              )}
+            </View>
             {!isPremium && (
-              <View style={styles.proTag}>
-                <Crown color="#F59E0B" size={11} style={{ marginRight: 3 }} />
-                <Text style={styles.proTagText}>PRO</Text>
-              </View>
+              <TouchableOpacity onPress={onOpenPaywall} activeOpacity={0.8}>
+                <View style={styles.proTag}>
+                  <Crown color="#F59E0B" size={11} style={{ marginRight: 3 }} />
+                  <Text style={styles.proTagText}>PRO</Text>
+                </View>
+              </TouchableOpacity>
             )}
           </View>
 
           {isPremium ? (
             optionChain.length > 0 ? (
-              <View style={{ maxHeight: 195 }}>
-                <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {optionChain.map((contract: CSPOptionContract, idx: number) => {
-                    const isSelected = selectedContract?.symbol === contract.symbol || strikePrice === contract.strike.toFixed(2);
-                    return (
-                      <TouchableOpacity
-                        key={contract.symbol || idx}
-                        style={[styles.chainRow, isSelected && styles.chainRowSelected]}
-                        onPress={() => selectContractFromChain(contract)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.chainStrike}>${contract.strike.toFixed(2)} Put</Text>
-                        <Text style={styles.chainExp}>{contract.expiration}</Text>
-                        <Text style={styles.chainPrem}>+${contract.premium.toFixed(2)}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+              <View>
+                {/* Expiration Date Pill Filters */}
+                {uniqueExpirations.length > 1 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.expPillsScroll}
+                    contentContainerStyle={styles.expPillsContent}
+                  >
+                    <TouchableOpacity
+                      style={[styles.expPill, selectedExpFilter === 'all' && styles.expPillActive]}
+                      onPress={() => handleSelectExpFilter('all')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.expPillText, selectedExpFilter === 'all' && styles.expPillTextActive]}>
+                        All ({optionChain.length})
+                      </Text>
+                    </TouchableOpacity>
+                    {uniqueExpirations.map((exp) => {
+                      const expTime = new Date(exp + 'T16:00:00Z').getTime();
+                      const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
+                      const isSelected = selectedExpFilter === exp;
+                      return (
+                        <TouchableOpacity
+                          key={exp}
+                          style={[styles.expPill, isSelected && styles.expPillActive]}
+                          onPress={() => handleSelectExpFilter(exp)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={[styles.expPillText, isSelected && styles.expPillTextActive]}>
+                            {exp} ({days}d)
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+
+                <View style={{ maxHeight: 220 }}>
+                  <View style={styles.chainColHeaders}>
+                    <Text style={[styles.chainColHeader, { flex: 1.1 }]}>STRIKE</Text>
+                    <Text style={[styles.chainColHeader, { flex: 1.1, textAlign: 'center' }]}>EXPIRATION</Text>
+                    <Text style={[styles.chainColHeader, { flex: 1.4, textAlign: 'right' }]}>PREM / SHARE</Text>
+                  </View>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                    {displayedContracts.map((contract: CSPOptionContract, idx: number) => {
+                      const isSelected = selectedContract
+                        ? (selectedContract.symbol === contract.symbol || (selectedContract.strike === contract.strike && selectedContract.expiration === contract.expiration))
+                        : strikePrice === contract.strike.toFixed(2);
+                      return (
+                        <TouchableOpacity
+                          key={contract.symbol || idx}
+                          style={[styles.chainRow, isSelected && styles.chainRowSelected]}
+                          onPress={() => selectContractFromChain(contract)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.chainStrike}>${contract.strike.toFixed(2)} Put</Text>
+                          <Text style={styles.chainExp}>{contract.expiration}</Text>
+                          <View style={styles.chainPremCol}>
+                            <Text style={styles.chainPrem}>+${contract.premium.toFixed(2)}/sh</Text>
+                            <Text style={styles.chainPremTotal}>(${(contract.premium * 100).toFixed(0)}/cnt)</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
               </View>
             ) : (
               <ActivityIndicator color="#10B981" style={{ margin: 12 }} />
@@ -360,7 +510,14 @@ export default function Calculator({
 
           <TouchableOpacity
             style={styles.rollSimBtn}
-            onPress={() => onOpenRollSim(metrics)}
+            onPress={() => onOpenRollSim({
+              ticker: ticker.trim().toUpperCase(),
+              stockPrice: parseFloat(stockPrice) || 0,
+              strikePrice: parseFloat(strikePrice) || 0,
+              premium: parseFloat(premium) || 0,
+              contracts: parsedContracts,
+              dte: parseInt(dte, 10) || 30,
+            })}
             activeOpacity={0.85}
           >
             <RefreshCw color="#3B82F6" size={18} style={{ marginRight: 6 }} />
@@ -586,19 +743,85 @@ const styles = StyleSheet.create({
     borderColor: '#10B981',
     backgroundColor: '#0F291E',
   },
+  chainColHeaders: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  chainColHeader: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
   chainStrike: {
     color: '#F8FAFC',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
   },
   chainExp: {
     color: '#94A3B8',
-    fontSize: 12.5,
+    fontSize: 12,
+  },
+  chainPremCol: {
+    alignItems: 'flex-end',
   },
   chainPrem: {
     color: '#10B981',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '800',
+  },
+  chainPremTotal: {
+    color: '#34D399',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  liveBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    marginLeft: 7,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  liveBadgeText: {
+    color: '#10B981',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  expPillsScroll: {
+    marginBottom: 10,
+  },
+  expPillsContent: {
+    paddingVertical: 2,
+  },
+  expPill: {
+    backgroundColor: '#0B0F19',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    borderRadius: 8,
+    marginRight: 7,
+  },
+  expPillActive: {
+    backgroundColor: '#0F291E',
+    borderColor: '#10B981',
+  },
+  expPillText: {
+    color: '#94A3B8',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  expPillTextActive: {
+    color: '#10B981',
+    fontWeight: '700',
   },
   paywallOverlay: {
     flexDirection: 'row',

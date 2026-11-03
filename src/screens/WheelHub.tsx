@@ -124,6 +124,19 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
   };
 
   const handleCreatePosition = async () => {
+    if (!isPremium && positions.length >= 1) {
+      setModalVisible(false);
+      Alert.alert(
+        'Pro Feature Limit',
+        'Free tier allows 1 active Wheel strategy position. Upgrade to CSP Pro for unlimited Wheel positions & cycle tracking.',
+        [
+          { text: 'Unlock Pro', onPress: onOpenPaywall },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return;
+    }
+
     const t = newTicker.trim().toUpperCase();
     const s = parseFloat(newStrike);
     const p = parseFloat(newPutPremium);
@@ -217,24 +230,108 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
     ]);
   };
 
-  // Helper calculations
+  const handleUpdateCCStatus = async (
+    posId: string,
+    ccId: string,
+    newStatus: 'expired' | 'assigned'
+  ) => {
+    const updated = positions.map((p) => {
+      if (p.id === posId) {
+        const updatedCCs = p.coveredCallsSold.map((c) => (c.id === ccId ? { ...c, status: newStatus } : c));
+        const isAssigned = newStatus === 'assigned';
+        return {
+          ...p,
+          phase: isAssigned ? ('completed' as const) : ('covered_call' as const),
+          coveredCallsSold: updatedCCs,
+        };
+      }
+      return p;
+    });
+
+    await savePositions(updated);
+
+    if (newStatus === 'assigned') {
+      Alert.alert(
+        '🏆 Wheel Strategy Completed!',
+        'Your shares were called away at the Call Strike! Full Wheel cycle profit is realized and locked.'
+      );
+    } else {
+      Alert.alert('Call Expired Worthless', 'Kept 100% call premium. You can now sell another Covered Call!');
+    }
+  };
+
+  const handleRestartWheel = (posId: string) => {
+    Alert.alert(
+      'Restart Wheel Cycle?',
+      'Reset this position back to Phase 1 (Cash-Secured Put) to begin a fresh Wheel cycle?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restart Wheel',
+          onPress: async () => {
+            const updated = positions.map((p) => {
+              if (p.id === posId) {
+                return {
+                  ...p,
+                  phase: 'csp' as const,
+                  coveredCallsSold: [],
+                };
+              }
+              return p;
+            });
+            await savePositions(updated);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCompleteWheelManually = (posId: string) => {
+    Alert.alert(
+      'Complete Wheel Position?',
+      'Mark this entire Wheel cycle as completed? This will lock in your total realized income.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete Wheel',
+          onPress: async () => {
+            const updated = positions.map((p) =>
+              p.id === posId ? { ...p, phase: 'completed' as const } : p
+            );
+            await savePositions(updated);
+          },
+        },
+      ]
+    );
+  };
+
+  // Helper calculations with zero-division protection
   const calculateWheelSummary = (pos: WheelPosition) => {
-    const putTotalPrem = pos.initialPutPremium * pos.shares;
-    const ccTotalPrem = pos.coveredCallsSold.reduce((sum, c) => sum + c.premium * pos.shares, 0);
+    const shares = Math.max(1, pos.shares || 100);
+    const putTotalPrem = (pos.initialPutPremium || 0) * shares;
+    const ccTotalPrem = (pos.coveredCallsSold || []).reduce((sum, c) => sum + (c.premium || 0) * shares, 0);
     const totalIncome = putTotalPrem + ccTotalPrem;
 
-    const initialCostBasisPerShare = pos.initialStrike - pos.initialPutPremium;
-    const currentNetCostBasisPerShare = Math.max(0, pos.initialStrike - (totalIncome / pos.shares));
-    const totalCapitalLocked = pos.initialStrike * pos.shares;
-    const overallRocPercent = (totalIncome / totalCapitalLocked) * 100;
+    const initialCostBasisPerShare = Math.max(0, (pos.initialStrike || 0) - (pos.initialPutPremium || 0));
+    const currentNetCostBasisPerShare = Math.max(0, (pos.initialStrike || 0) - totalIncome / shares);
+    const totalCapitalLocked = (pos.initialStrike || 0) * shares;
+    const overallRocPercent = totalCapitalLocked > 0 ? (totalIncome / totalCapitalLocked) * 100 : 0;
+
+    // Assigned covered call capital gain
+    const assignedCall = (pos.coveredCallsSold || []).find((c) => c.status === 'assigned');
+    const capitalGain = assignedCall ? (assignedCall.strike - pos.initialStrike) * shares : 0;
+    const totalRealizedPnl = totalIncome + capitalGain;
 
     return {
+      shares,
       totalIncome,
       initialCostBasisPerShare,
       currentNetCostBasisPerShare,
       totalCapitalLocked,
       overallRocPercent,
-      ccCount: pos.coveredCallsSold.length,
+      capitalGain,
+      totalRealizedPnl,
+      ccCount: (pos.coveredCallsSold || []).length,
     };
   };
 
@@ -282,13 +379,47 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
           <Text style={styles.sectionHeader}>Active Wheel Ledgers ({positions.length})</Text>
           <TouchableOpacity
             style={styles.addBtn}
-            onPress={() => setModalVisible(true)}
+            onPress={() => {
+              if (!isPremium && positions.length >= 1) {
+                Alert.alert(
+                  'Pro Feature Limit',
+                  'Free tier allows 1 active Wheel strategy position. Upgrade to CSP Pro for unlimited Wheel positions & cycle tracking.',
+                  [
+                    { text: 'Unlock Pro', onPress: onOpenPaywall },
+                    { text: 'Cancel', style: 'cancel' }
+                  ]
+                );
+                return;
+              }
+              setModalVisible(true);
+            }}
             activeOpacity={0.85}
           >
-            <Plus size={16} color="#FFF" style={{ marginRight: 4 }} />
-            <Text style={styles.addBtnText}>Start New Wheel</Text>
+            {isPremium ? (
+              <Plus size={16} color="#FFF" style={{ marginRight: 4 }} />
+            ) : positions.length >= 1 ? (
+              <Crown size={16} color="#F59E0B" style={{ marginRight: 4 }} />
+            ) : (
+              <Plus size={16} color="#FFF" style={{ marginRight: 4 }} />
+            )}
+            <Text style={styles.addBtnText}>
+              {!isPremium && positions.length >= 1 ? 'Unlock Pro Wheel' : 'Start New Wheel'}
+            </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Free Tier Wheel Capacity Banner */}
+        {!isPremium && positions.length >= 1 && (
+          <TouchableOpacity style={styles.paywallBanner} onPress={onOpenPaywall} activeOpacity={0.85}>
+            <LinearGradient colors={['#7C3AED', '#4C1D95']} style={styles.bannerGradient}>
+              <Crown color="#F59E0B" size={24} style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bannerTitle}>Free Wheel Tier Limit Reached (1/1)</Text>
+                <Text style={styles.bannerSub}>Upgrade to Pro for unlimited concurrent Wheel cycles & multi-leg tracking.</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
 
         {/* WHEEL POSITIONS LIST */}
         {positions.length > 0 ? (
@@ -311,12 +442,14 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
                         pos.phase === 'csp' && styles.phaseCsp,
                         pos.phase === 'assigned_shares' && styles.phaseAssigned,
                         pos.phase === 'covered_call' && styles.phaseCc,
+                        pos.phase === 'completed' && styles.phaseCompleted,
                       ]}
                     >
                       <Text style={styles.phaseBadgeText}>
                         {pos.phase === 'csp' && 'Phase 1: Cash-Secured Put'}
                         {pos.phase === 'assigned_shares' && 'Phase 2: Assigned Shares'}
                         {pos.phase === 'covered_call' && `Phase 3: Selling CCs (${summary.ccCount})`}
+                        {pos.phase === 'completed' && `🏆 Wheel Complete (+${summary.overallRocPercent.toFixed(1)}% ROC)`}
                       </Text>
                     </View>
 
@@ -353,14 +486,44 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
                   </View>
                 </View>
 
-                {/* Covered Call Log Sub-List */}
+                {/* Covered Call Log Sub-List with Status & Actions */}
                 {pos.coveredCallsSold.length > 0 && (
                   <View style={styles.ccSubBox}>
                     <Text style={styles.ccSubTitle}>Covered Calls Logged:</Text>
                     {pos.coveredCallsSold.map((cc, i) => (
-                      <View key={cc.id || i} style={styles.ccRow}>
-                        <Text style={styles.ccText}>• Sold ${cc.strike} Call ({cc.dte} DTE)</Text>
-                        <Text style={styles.ccPrem}>+${cc.premium.toFixed(2)}/sh (+${(cc.premium * pos.shares).toFixed(0)})</Text>
+                      <View key={cc.id || i} style={styles.ccItemCard}>
+                        <View style={styles.ccRow}>
+                          <Text style={styles.ccText}>• Sold ${cc.strike} Call ({cc.dte} DTE)</Text>
+                          <Text style={styles.ccPrem}>+${cc.premium.toFixed(2)}/sh (+${(cc.premium * pos.shares).toFixed(0)})</Text>
+                        </View>
+
+                        <View style={styles.ccStatusRow}>
+                          {cc.status === 'active' ? (
+                            <View style={styles.ccActionBtnRow}>
+                              <TouchableOpacity
+                                style={styles.ccExpireBtn}
+                                onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'expired')}
+                              >
+                                <Text style={styles.ccExpireText}>Expire (100% Win)</Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={styles.ccAssignBtn}
+                                onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'assigned')}
+                              >
+                                <Text style={styles.ccAssignText}>Assigned (Called Away)</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : cc.status === 'expired' ? (
+                            <View style={styles.statusPillExpired}>
+                              <Text style={styles.statusPillTextExpired}>Expired Worthless</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.statusPillAssigned}>
+                              <Text style={styles.statusPillTextAssigned}>Shares Called Away</Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
                     ))}
                   </View>
@@ -379,17 +542,36 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
                   )}
 
                   {(pos.phase === 'assigned_shares' || pos.phase === 'covered_call') && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <TouchableOpacity
+                        style={[styles.addCcBtn, { flex: 0.65 }]}
+                        onPress={() => {
+                          setSelectedPosition(pos);
+                          setCcStrike((pos.initialStrike * 1.05).toFixed(2));
+                          setCcPremium('2.50');
+                          setCcModalVisible(true);
+                        }}
+                      >
+                        <Plus size={15} color="#3B82F6" style={{ marginRight: 6 }} />
+                        <Text style={styles.addCcBtnText}>+ Sell Covered Call</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.manualCompleteBtn, { flex: 0.32 }]}
+                        onPress={() => handleCompleteWheelManually(pos.id)}
+                      >
+                        <Text style={styles.manualCompleteBtnText}>Complete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {pos.phase === 'completed' && (
                     <TouchableOpacity
-                      style={styles.addCcBtn}
-                      onPress={() => {
-                        setSelectedPosition(pos);
-                        setCcStrike((pos.initialStrike * 1.05).toFixed(2));
-                        setCcPremium('2.50');
-                        setCcModalVisible(true);
-                      }}
+                      style={styles.restartBtn}
+                      onPress={() => handleRestartWheel(pos.id)}
                     >
-                      <Plus size={15} color="#3B82F6" style={{ marginRight: 6 }} />
-                      <Text style={styles.addCcBtnText}>+ Sell New Covered Call</Text>
+                      <RotateCcw size={15} color="#10B981" style={{ marginRight: 6 }} />
+                      <Text style={styles.restartBtnText}>Restart Wheel Cycle</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -634,6 +816,9 @@ const styles = StyleSheet.create({
   phaseCc: {
     backgroundColor: '#1E3A8A',
   },
+  phaseCompleted: {
+    backgroundColor: '#064E3B',
+  },
   phaseBadgeText: {
     color: '#FFF',
     fontSize: 10.5,
@@ -692,19 +877,88 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 4,
   },
+  ccItemCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 8,
+    padding: 7,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
   ccRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   ccText: {
     fontSize: 11,
     color: '#CBD5E1',
+    fontWeight: '600',
   },
   ccPrem: {
     fontSize: 11,
     color: '#10B981',
     fontWeight: '700',
+  },
+  ccStatusRow: {
+    marginTop: 2,
+  },
+  ccActionBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  ccExpireBtn: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  ccExpireText: {
+    color: '#A7F3D0',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  ccAssignBtn: {
+    backgroundColor: '#451A03',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D97706',
+  },
+  ccAssignText: {
+    color: '#FDE68A',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statusPillExpired: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  statusPillTextExpired: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statusPillAssigned: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#451A03',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#B45309',
+  },
+  statusPillTextAssigned: {
+    color: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '800',
   },
   cardActions: {
     marginTop: 10,
@@ -723,6 +977,36 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontWeight: '700',
     fontSize: 12.5,
+  },
+  manualCompleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E293B',
+    paddingVertical: 9,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  manualCompleteBtnText: {
+    color: '#94A3B8',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  restartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#064E3B',
+    paddingVertical: 9,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  restartBtnText: {
+    color: '#A7F3D0',
+    fontWeight: '800',
+    fontSize: 13,
   },
   addCcBtn: {
     flexDirection: 'row',
@@ -825,5 +1109,24 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '800',
     fontSize: 13.5,
+  },
+  paywallBanner: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  bannerGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+  },
+  bannerTitle: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  bannerSub: {
+    color: '#DDD6FE',
+    fontSize: 11,
   },
 });

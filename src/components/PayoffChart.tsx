@@ -60,9 +60,10 @@ export default function PayoffChart({
     return paddingX + Math.min(1, Math.max(0, ratio)) * innerWidth;
   };
 
-  // P&L bounds
-  const maxPl = premium * 1.3;
-  const minPl = -(strikePrice - breakeven) * 1.5 || -premium * 3;
+  // P&L bounds: Ensure minPl accommodates the payoff at minStock without clipping
+  const payoffAtMin = getPayoffPerShare(minStock);
+  const minPl = Math.min(payoffAtMin, -premium * 1.5) * 1.1;
+  const maxPl = Math.max(premium * 1.35, 0.5);
   const plRange = maxPl - minPl || 1;
 
   // Map P&L per share to SVG Y coordinate

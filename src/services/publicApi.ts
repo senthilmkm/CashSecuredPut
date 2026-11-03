@@ -53,12 +53,14 @@ export async function fetchPutOptionChainFromProxy(
   symbol: string,
   stockPrice: number,
   accountId: string,
-  proxyUrl: string
+  proxyUrl: string,
+  dte?: number
 ): Promise<CSPOptionContract[]> {
   const cleanSymbol = symbol.trim().toUpperCase();
   const cleanProxyUrl = proxyUrl.replace(/\/$/, '');
 
-  const url = `${cleanProxyUrl}/options?symbol=${cleanSymbol}&accountId=${accountId}&stockPrice=${stockPrice}&optionType=put`;
+  const dteParam = dte ? `&dte=${dte}` : '';
+  const url = `${cleanProxyUrl}/options?symbol=${cleanSymbol}&accountId=${accountId}&stockPrice=${stockPrice}&optionType=put${dteParam}`;
   const response = await fetch(url, {
     method: 'GET',
     headers: {
@@ -79,18 +81,32 @@ export async function fetchPutOptionChainFromProxy(
     throw new Error(data.error);
   }
 
-  // Ensure items map as puts
+  // Ensure items map as puts only if they are genuinely PUT options
   if (Array.isArray(data)) {
-    return data.map((item: any) => ({
-      symbol: item.symbol,
-      strike: item.strike,
-      expiration: item.expiration,
-      type: 'put',
-      bid: item.bid || 0,
-      ask: item.ask || 0,
-      last: item.last || item.premium || 0,
-      premium: item.premium || item.last || 0,
-    }));
+    const putContracts = data.filter((item: any) => {
+      // Discard explicitly labeled calls
+      if (item.type && item.type.toLowerCase() === 'call') return false;
+      // Discard standard OCC format call symbols (e.g. AAPL261104C00275000)
+      if (typeof item.symbol === 'string' && /^[A-Z]+\d{6}C\d{8}$/i.test(item.symbol)) return false;
+      // Accept if explicitly marked as put or OCC put symbol (e.g. AAPL261104P00275000)
+      return (
+        item.type?.toLowerCase() === 'put' ||
+        (typeof item.symbol === 'string' && /^[A-Z]+\d{6}P\d{8}$/i.test(item.symbol))
+      );
+    });
+
+    if (putContracts.length > 0) {
+      return putContracts.map((item: any) => ({
+        symbol: item.symbol,
+        strike: typeof item.strike === 'number' ? item.strike : parseFloat(item.strike) || 0,
+        expiration: item.expiration,
+        type: 'put',
+        bid: item.bid || 0,
+        ask: item.ask || 0,
+        last: item.last || item.premium || 0,
+        premium: item.premium || item.last || 0,
+      }));
+    }
   }
 
   return [];
@@ -113,10 +129,10 @@ export async function getMarketQuote(symbol: string): Promise<StockQuote> {
 /**
  * Unified Option Chain Fetcher: Tries Public.com proxy first, falls back to Alpaca
  */
-export async function getPutOptionChain(symbol: string, stockPrice: number): Promise<CSPOptionContract[]> {
+export async function getPutOptionChain(symbol: string, stockPrice: number, dte?: number): Promise<CSPOptionContract[]> {
   if (BROKER_CONFIG.PROXY_URL && BROKER_CONFIG.PUBLIC_COM_ACCOUNT_ID) {
     try {
-      const chain = await fetchPutOptionChainFromProxy(symbol, stockPrice, BROKER_CONFIG.PUBLIC_COM_ACCOUNT_ID, BROKER_CONFIG.PROXY_URL);
+      const chain = await fetchPutOptionChainFromProxy(symbol, stockPrice, BROKER_CONFIG.PUBLIC_COM_ACCOUNT_ID, BROKER_CONFIG.PROXY_URL, dte);
       if (chain && chain.length > 0) {
         return chain;
       }

@@ -30,7 +30,7 @@ import {
   RotateCcw,
 } from 'lucide-react-native';
 import { CSPTrade } from '../hooks/useAppStorage';
-import { exportPortfolioPDF, generateTradesCSV } from '../services/exportService';
+import { exportPortfolioPDF, exportPortfolioCSV, calculateDaysRemaining } from '../services/exportService';
 
 interface ActiveTradesProps {
   trades: CSPTrade[];
@@ -38,6 +38,7 @@ interface ActiveTradesProps {
   onUpdateStatus: (tradeId: string, status: 'expired_worthless' | 'assigned' | 'closed_early') => void;
   onRemoveTrade: (tradeId: string) => void;
   onRollTrade: (trade: CSPTrade) => void;
+  onTransitionToWheel?: (tradeData: { ticker: string; strike: number; premium: number; shares: number }) => void;
   onOpenPaywall: () => void;
   isPremium: boolean;
 }
@@ -48,6 +49,7 @@ export default function ActiveTrades({
   onUpdateStatus,
   onRemoveTrade,
   onRollTrade,
+  onTransitionToWheel,
   onOpenPaywall,
   isPremium,
 }: ActiveTradesProps) {
@@ -55,6 +57,7 @@ export default function ActiveTrades({
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'itm' | 'expiring'>('all');
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exportData, setExportData] = useState<{ ticker: string; costBasis: string; shares: number } | null>(null);
+  const [exportTradeObj, setExportTradeObj] = useState<CSPTrade | null>(null);
 
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
   const totalPremium = trades.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
@@ -62,16 +65,19 @@ export default function ActiveTrades({
 
   const filteredTrades = trades.filter((t) => {
     const isITM = t.strikePrice > t.stockPrice;
+    const dteLeft = calculateDaysRemaining(t.expirationDate, t.dte);
     if (selectedFilter === 'itm') return isITM;
-    if (selectedFilter === 'expiring') return t.dte <= 5;
+    if (selectedFilter === 'expiring') return dteLeft <= 5;
     return true;
   });
 
   const handleMarkAssigned = (trade: CSPTrade) => {
-    const effectiveCostBasis = (trade.strikePrice - trade.premium).toFixed(2);
+    const prem = trade.cumulativePremium || trade.premium;
+    const effectiveCostBasis = Math.max(0, trade.strikePrice - prem).toFixed(2);
     const shares = trade.contracts * 100;
 
     onUpdateStatus(trade.id, 'assigned');
+    setExportTradeObj(trade);
     setExportData({
       ticker: trade.ticker,
       costBasis: effectiveCostBasis,
@@ -80,21 +86,46 @@ export default function ActiveTrades({
     setExportModalVisible(true);
   };
 
-  const handleExportPDF = async () => {
-    const success = await exportPortfolioPDF(trades, history);
-    if (success) {
-      Alert.alert('Report Generated', 'PDF Portfolio Report created successfully.');
+  const handleExportPrompt = () => {
+    if (!isPremium) {
+      onOpenPaywall();
+      return;
     }
+    Alert.alert(
+      'Export Portfolio Report',
+      'Choose your preferred export format:',
+      [
+        {
+          text: 'PDF Report',
+          onPress: async () => {
+            const success = await exportPortfolioPDF(trades, history);
+            if (success) {
+              Alert.alert('Report Generated', 'PDF Portfolio Report created successfully.');
+            }
+          },
+        },
+        {
+          text: 'CSV Spreadsheet',
+          onPress: async () => {
+            const success = await exportPortfolioCSV(trades, history);
+            if (success) {
+              Alert.alert('CSV Exported', 'CSV spreadsheet file shared successfully.');
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const handleCopyParams = () => {
     if (!exportData) return;
     const summary = `Ticker: ${exportData.ticker}\nPurchase Price: $${exportData.costBasis}\nShares: ${exportData.shares}`;
     
-    if (Platform.OS === 'web' && navigator?.clipboard) {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator?.clipboard) {
       navigator.clipboard.writeText(summary);
     }
-    Alert.alert('Copied to Clipboard!', summary);
+    Alert.alert('Assignment Details', summary);
   };
 
   return (
@@ -160,9 +191,15 @@ export default function ActiveTrades({
 
       {/* Export Report Bar */}
       <View style={styles.exportBar}>
-        <TouchableOpacity style={styles.exportPdfBtn} onPress={handleExportPDF} activeOpacity={0.85}>
-          <Share2 size={14} color="#FFF" style={{ marginRight: 6 }} />
-          <Text style={styles.exportPdfBtnText}>Export Portfolio PDF / CSV Report</Text>
+        <TouchableOpacity style={styles.exportPdfBtn} onPress={handleExportPrompt} activeOpacity={0.85}>
+          {isPremium ? (
+            <Share2 size={14} color="#FFF" style={{ marginRight: 6 }} />
+          ) : (
+            <Crown size={14} color="#F59E0B" style={{ marginRight: 6 }} />
+          )}
+          <Text style={styles.exportPdfBtnText}>
+            {isPremium ? 'Export Portfolio PDF / CSV Report' : 'Export Portfolio Report (PRO)'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -191,7 +228,9 @@ export default function ActiveTrades({
           </View>
         ) : (
           history.map((hTrade) => {
-            const netIncome = ((hTrade.cumulativePremium || hTrade.premium) * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
+            const hPrem = hTrade.cumulativePremium || hTrade.premium;
+            const netIncome = (hPrem * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
+            const effBasis = Math.max(0, hTrade.strikePrice - hPrem).toFixed(2);
             const statusLabel =
               hTrade.status === 'expired_worthless'
                 ? 'Expired Worthless (100% Win)'
@@ -240,7 +279,7 @@ export default function ActiveTrades({
 
                   <View style={styles.tradeCol}>
                     <Text style={styles.tradeLabel}>Effective Basis</Text>
-                    <Text style={styles.tradeVal}>${(hTrade.strikePrice - hTrade.premium).toFixed(2)}</Text>
+                    <Text style={styles.tradeVal}>${effBasis}</Text>
                   </View>
 
                   <View style={styles.tradeCol}>
@@ -292,9 +331,11 @@ export default function ActiveTrades({
       ) : (
         filteredTrades.map((trade) => {
           const isITM = trade.strikePrice > trade.stockPrice;
-          const effectiveCost = (trade.strikePrice - trade.premium).toFixed(2);
-          const netIncome = (trade.premium * 100 * trade.contracts - trade.commissions).toFixed(2);
+          const prem = trade.cumulativePremium || trade.premium;
+          const effectiveCost = Math.max(0, trade.strikePrice - prem).toFixed(2);
+          const netIncome = (prem * 100 * trade.contracts - trade.commissions).toFixed(2);
           const collateral = trade.strikePrice * 100 * trade.contracts;
+          const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
 
           return (
             <View key={trade.id} style={styles.tradeCard}>
@@ -310,7 +351,7 @@ export default function ActiveTrades({
 
                 <View style={styles.dteBadge}>
                   <Clock color="#94A3B8" size={12} style={{ marginRight: 4 }} />
-                  <Text style={styles.dteText}>{trade.dte} Days Left</Text>
+                  <Text style={styles.dteText}>{dteLeft} Days Left</Text>
                 </View>
               </View>
 
@@ -401,7 +442,22 @@ export default function ActiveTrades({
                   <Text style={styles.costBoxSub}>Ready to sell Covered Calls</Text>
                 </View>
 
-                <TouchableOpacity style={styles.launchBtn} onPress={() => setExportModalVisible(false)} activeOpacity={0.85}>
+                <TouchableOpacity
+                  style={styles.launchBtn}
+                  onPress={() => {
+                    setExportModalVisible(false);
+                    if (onTransitionToWheel && exportTradeObj) {
+                      const prem = exportTradeObj.cumulativePremium || exportTradeObj.premium;
+                      onTransitionToWheel({
+                        ticker: exportTradeObj.ticker,
+                        strike: exportTradeObj.strikePrice,
+                        premium: prem,
+                        shares: exportTradeObj.contracts * 100,
+                      });
+                    }
+                  }}
+                  activeOpacity={0.85}
+                >
                   <LinearGradient colors={['#10B981', '#059669']} style={styles.launchGradient}>
                     <RotateCcw color="#FFF" size={18} style={{ marginRight: 8 }} />
                     <Text style={styles.launchBtnText}>Manage in Wheel Suite Tab</Text>

@@ -35,16 +35,35 @@ export default function RollSimulator({
 
   const [rollResult, setRollResult] = useState<RollSimulationResult | null>(null);
 
+  // Sync state when initialData changes (e.g. user selects a different trade in Portfolio)
   useEffect(() => {
+    if (initialData) {
+      if (initialData.strikePrice) {
+        setCurrentStrike(initialData.strikePrice.toString());
+        setNewStrike((initialData.strikePrice - 5).toString());
+      }
+      if (initialData.contracts) {
+        setCurrentContracts(initialData.contracts.toString());
+      }
+      if (initialData.premium) {
+        // reasonable default buyback estimate is ~1.2x initial premium or 4.50
+        setCloseCost((initialData.premium * 1.2).toFixed(2));
+      }
+    }
+  }, [initialData]);
+
+  useEffect(() => {
+    const originalPrem = initialData?.cumulativePremium || initialData?.premium || 0;
     const res = calculateRollCSP({
       currentStrike: parseFloat(currentStrike) || 0,
       currentContracts: parseInt(currentContracts, 10) || 1,
       closeCostPerContract: parseFloat(closeCost) || 0,
       newStrike: parseFloat(newStrike) || 0,
       newPremiumPerContract: parseFloat(newPremium) || 0,
+      originalPremiumPerShare: originalPrem,
     });
     setRollResult(res);
-  }, [currentStrike, currentContracts, closeCost, newStrike, newPremium]);
+  }, [currentStrike, currentContracts, closeCost, newStrike, newPremium, initialData]);
 
   const handleApplyRoll = async () => {
     if (!isPremium) {
@@ -84,6 +103,20 @@ export default function RollSimulator({
           Adjust strike price and extend expiration to lock in a net credit when a stock moves down.
         </Text>
       </View>
+
+      {/* Active Position Being Rolled Banner */}
+      {initialData?.ticker && (
+        <View style={styles.activeTradeBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.activeTradeTicker}>
+              Rolling: {initialData.ticker} (${initialData.strikePrice?.toFixed(2)} Put)
+            </Text>
+            <Text style={styles.activeTradeSub}>
+              Initial Premium: +${(initialData.cumulativePremium || initialData.premium || 0).toFixed(2)}/sh • {initialData.contracts} Contract{initialData.contracts > 1 ? 's' : ''}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* Paywall Lock Ribbon for Free Users */}
       {!isPremium && (
@@ -228,6 +261,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#94A3B8',
     lineHeight: 18,
+  },
+  activeTradeBanner: {
+    backgroundColor: '#0F291E',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  activeTradeTicker: {
+    color: '#10B981',
+    fontWeight: '800',
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  activeTradeSub: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '600',
   },
   proRibbon: {
     flexDirection: 'row',
