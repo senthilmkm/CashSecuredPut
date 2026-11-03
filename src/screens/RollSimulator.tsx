@@ -112,7 +112,7 @@ export default function RollSimulator({
               Rolling: {initialData.ticker} (${initialData.strikePrice?.toFixed(2)} Put)
             </Text>
             <Text style={styles.activeTradeSub}>
-              Initial Premium: +${(initialData.cumulativePremium || initialData.premium || 0).toFixed(2)}/sh • {initialData.contracts} Contract{initialData.contracts > 1 ? 's' : ''}
+              Initial Premium: +${(initialData.cumulativeCostBasisCredit || initialData.cumulativePremium || initialData.premium || 0).toFixed(2)}/sh • {initialData.contracts} Contract{initialData.contracts > 1 ? 's' : ''}
             </Text>
           </View>
         </View>

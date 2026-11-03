@@ -32,8 +32,12 @@ export function generateTradesCSV(trades: CSPTrade[], history: CSPTrade[] = []):
   const allTrades = [...trades, ...history];
 
   const rows = allTrades.map((t) => {
-    const prem = t.cumulativePremium || t.premium;
-    const effBasis = Math.max(0, t.strikePrice - prem);
+    const isHistory = t.status !== 'active';
+    const prem = isHistory
+      ? (t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium)
+      : t.premium;
+    const basisCredit = t.cumulativeCostBasisCredit || t.cumulativePremium || t.premium;
+    const effBasis = Math.max(0, t.strikePrice - basisCredit);
     const dteLeft = calculateDaysRemaining(t.expirationDate, t.dte);
 
     return [
@@ -88,15 +92,15 @@ export async function exportPortfolioCSV(trades: CSPTrade[], history: CSPTrade[]
  */
 export async function exportPortfolioPDF(trades: CSPTrade[], history: CSPTrade[] = []): Promise<boolean> {
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
-  const activeIncome = trades.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
-  const historicIncome = history.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
-  const totalIncome = activeIncome + historicIncome;
+  const activeIncome = trades.reduce((sum, t) => sum + t.premium * 100 * t.contracts - t.commissions, 0);
+  const historicIncome = history.reduce((sum, t) => sum + ((t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) * 100 * t.contracts - t.commissions), 0);
+  const totalIncome = historicIncome;
 
   const tradeRowsHtml = trades
     .map(
       (t) => {
-        const prem = t.cumulativePremium || t.premium;
-        const effBasis = Math.max(0, t.strikePrice - prem);
+        const basisCredit = t.cumulativeCostBasisCredit || t.cumulativePremium || t.premium;
+        const effBasis = Math.max(0, t.strikePrice - basisCredit);
         const dteLeft = calculateDaysRemaining(t.expirationDate, t.dte);
 
         return `
@@ -104,7 +108,7 @@ export async function exportPortfolioPDF(trades: CSPTrade[], history: CSPTrade[]
       <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: bold;">${t.ticker}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${t.strikePrice.toFixed(2)} Put</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${t.stockPrice.toFixed(2)}</td>
-      <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #10B981; font-weight: bold;">+$${(prem * 100 * t.contracts - t.commissions).toFixed(2)}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd; color: #10B981; font-weight: bold;">+$${(t.premium * 100 * t.contracts - t.commissions).toFixed(2)}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${effBasis.toFixed(2)}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">$${(t.strikePrice * 100 * t.contracts).toLocaleString()}</td>
       <td style="padding: 8px; border-bottom: 1px solid #ddd;">${dteLeft} days (${t.expirationDate})</td>

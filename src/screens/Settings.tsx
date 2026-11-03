@@ -99,9 +99,11 @@ export default function Settings({
 
       let csvContent = 'ID,Ticker,Status,StockPrice,StrikePrice,Premium,Contracts,DTE,NetIncome,EffectiveCost,CreatedAt\n';
       allTrades.forEach((t) => {
-        const prem = t.cumulativePremium || t.premium;
+        const isHistory = t.status !== 'active';
+        const prem = isHistory ? (t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) : t.premium;
+        const basisCredit = t.cumulativeCostBasisCredit || t.cumulativePremium || t.premium;
         const netIncome = prem * 100 * t.contracts - t.commissions;
-        const effectiveCost = Math.max(0, t.strikePrice - prem);
+        const effectiveCost = Math.max(0, t.strikePrice - basisCredit);
         csvContent += `${t.id},${t.ticker},${t.status},${t.stockPrice},${t.strikePrice},${t.premium},${t.contracts},${t.dte},${netIncome.toFixed(2)},${effectiveCost.toFixed(2)},${t.createdAt}\n`;
       });
 
@@ -133,9 +135,11 @@ export default function Settings({
 
       let rowsHtml = '';
       allTrades.forEach((t) => {
-        const prem = t.cumulativePremium || t.premium;
+        const isHistory = t.status !== 'active';
+        const prem = isHistory ? (t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) : t.premium;
+        const basisCredit = t.cumulativeCostBasisCredit || t.cumulativePremium || t.premium;
         const netIncome = (prem * 100 * t.contracts - t.commissions).toFixed(2);
-        const effectiveCost = Math.max(0, t.strikePrice - prem).toFixed(2);
+        const effectiveCost = Math.max(0, t.strikePrice - basisCredit).toFixed(2);
         const collateral = (t.strikePrice * 100 * t.contracts).toLocaleString();
 
         rowsHtml += `

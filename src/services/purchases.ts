@@ -13,7 +13,8 @@ export const PRODUCT_IDS = {
   MONTHLY: 'csp_monthly_sub',
 };
 
-const ENTITLEMENT_ID = 'Premium';
+import { ENTITLEMENT_ID, isCustomerEntitled } from './entitlementUtils';
+export { ENTITLEMENT_ID, isCustomerEntitled };
 const STORAGE_KEY = '@CashSecuredProfit:is_premium';
 
 let isPurchasesConfigured = false;
@@ -64,7 +65,7 @@ export async function checkPremiumStatus(): Promise<boolean> {
     }
 
     const customerInfo = await Purchases.getCustomerInfo();
-    const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+    const isActive = isCustomerEntitled(customerInfo);
     await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
     return isActive;
   } catch (error) {
@@ -230,7 +231,7 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
         if (pkg) {
           console.log('[Purchases] Launching Apple StoreKit purchase for package:', pkg.identifier);
           const { customerInfo } = await Purchases.purchasePackage(pkg);
-          const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+          const isActive = isCustomerEntitled(customerInfo);
           await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
           return isActive;
         }
@@ -259,7 +260,7 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
       if (productToPurchase) {
         console.log('[Purchases] Launching Apple StoreKit direct product purchase for:', productToPurchase.identifier);
         const { customerInfo } = await Purchases.purchaseStoreProduct(productToPurchase);
-        const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+        const isActive = isCustomerEntitled(customerInfo);
         await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
         return isActive;
       }
@@ -300,7 +301,7 @@ export async function restorePremiumPurchases(): Promise<boolean> {
   try {
     await initializePurchases();
     const customerInfo = await Purchases.restorePurchases();
-    const isActive = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+    const isActive = isCustomerEntitled(customerInfo);
     await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
     return isActive;
   } catch (error: any) {

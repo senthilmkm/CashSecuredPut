@@ -81,18 +81,33 @@ export default function App() {
         }
         if (finalStatus !== 'granted') return;
 
+        const NOTIFIED_KEY = '@csp_notified_dates';
+        const todayStr = new Date().toISOString().split('T')[0];
+        const notifiedRaw = await AsyncStorage.getItem(NOTIFIED_KEY);
+        const notifiedMap: Record<string, string> = notifiedRaw ? JSON.parse(notifiedRaw) : {};
+
+        let mapChanged = false;
         for (const trade of trades) {
           const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
           if (dteLeft <= expirationAlertThreshold && trade.status === 'active') {
-            await Notifications.scheduleNotificationAsync({
-              identifier: `csp_expiry_${trade.id}`,
-              content: {
-                title: `CSP Expiration Alert: ${trade.ticker}`,
-                body: `Your $${trade.strikePrice} ${trade.ticker} Put option expires in ${dteLeft} days! Check position status.`,
-              },
-              trigger: null,
-            });
+            // Deduplicate: notify at most once per calendar day per position
+            if (notifiedMap[trade.id] !== todayStr) {
+              await Notifications.scheduleNotificationAsync({
+                identifier: `csp_expiry_${trade.id}`,
+                content: {
+                  title: `CSP Expiration Alert: ${trade.ticker}`,
+                  body: `Your $${trade.strikePrice} ${trade.ticker} Put option expires in ${dteLeft} day${dteLeft === 1 ? '' : 's'}! Check position status.`,
+                },
+                trigger: null,
+              });
+              notifiedMap[trade.id] = todayStr;
+              mapChanged = true;
+            }
           }
+        }
+
+        if (mapChanged) {
+          await AsyncStorage.setItem(NOTIFIED_KEY, JSON.stringify(notifiedMap));
         }
       } catch (err) {
         console.warn('[Notifications] Alert scheduling failed:', err);

@@ -105,11 +105,16 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
 
   const loadPositions = async () => {
     try {
+      const initialized = await AsyncStorage.getItem('@csp_wheel_initialized');
       const json = await AsyncStorage.getItem(STORAGE_KEY_WHEEL);
-      if (json) {
-        setPositions(JSON.parse(json));
-      } else {
-        // Populate sample Wheel position to show users how it works
+      if (json !== null) {
+        try {
+          setPositions(JSON.parse(json));
+        } catch (e) {
+          setPositions([]);
+        }
+      } else if (!initialized) {
+        // Populate sample Wheel position only on fresh first-ever install
         const sample: WheelPosition[] = [
           {
             id: 'sample_1',
@@ -134,7 +139,14 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
           },
         ];
         setPositions(sample);
-        await AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(sample));
+        await Promise.all([
+          AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(sample)),
+          AsyncStorage.setItem('@csp_wheel_initialized', 'true'),
+        ]);
+      } else {
+        // Data was cleared or positions removed by user; maintain clean empty state
+        setPositions([]);
+        await AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify([]));
       }
     } catch (e) {
       console.warn('Failed to load wheel positions', e);
@@ -146,7 +158,10 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
   const savePositions = async (updated: WheelPosition[]) => {
     try {
       setPositions(updated);
-      await AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(updated));
+      await Promise.all([
+        AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(updated)),
+        AsyncStorage.setItem('@csp_wheel_initialized', 'true'),
+      ]);
     } catch (e) {
       console.warn('Failed to save wheel positions', e);
     }

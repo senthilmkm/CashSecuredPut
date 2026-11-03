@@ -116,8 +116,8 @@ export default function ActiveTrades({
   const getTradeStockPrice = (t: CSPTrade) => liveQuotes[t.ticker]?.price ?? t.stockPrice;
 
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
-  const totalPremium = trades.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
-  const totalLifetimeRealized = history.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
+  const totalPremium = trades.reduce((sum, t) => sum + t.premium * 100 * t.contracts - t.commissions, 0);
+  const totalLifetimeRealized = history.reduce((sum, t) => sum + ((t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) * 100 * t.contracts - t.commissions), 0);
   const itmCount = trades.filter((t) => t.strikePrice > getTradeStockPrice(t)).length;
 
   const filteredTrades = trades.filter((t) => {
@@ -130,8 +130,8 @@ export default function ActiveTrades({
   });
 
   const handleMarkAssigned = (trade: CSPTrade) => {
-    const prem = trade.cumulativePremium || trade.premium;
-    const effectiveCostBasis = Math.max(0, trade.strikePrice - prem).toFixed(2);
+    const basisCredit = trade.cumulativeCostBasisCredit || trade.cumulativePremium || trade.premium;
+    const effectiveCostBasis = Math.max(0, trade.strikePrice - basisCredit).toFixed(2);
     const shares = trade.contracts * 100;
 
     onUpdateStatus(trade.id, 'assigned');
@@ -313,9 +313,9 @@ export default function ActiveTrades({
           </View>
         ) : (
           history.map((hTrade) => {
-            const hPrem = hTrade.cumulativePremium || hTrade.premium;
+            const hPrem = hTrade.cumulativePremium !== undefined ? hTrade.cumulativePremium : hTrade.premium;
             const netIncome = (hPrem * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
-            const effBasis = Math.max(0, hTrade.strikePrice - hPrem).toFixed(2);
+            const effBasis = Math.max(0, hTrade.strikePrice - (hTrade.cumulativeCostBasisCredit || hPrem)).toFixed(2);
             const statusLabel =
               hTrade.status === 'expired_worthless'
                 ? 'Expired Worthless (100% Win)'
@@ -453,9 +453,9 @@ export default function ActiveTrades({
               const currentStockPrice = liveQuote?.price ?? trade.stockPrice;
               const isITM = trade.strikePrice > currentStockPrice;
               const cushionPercent = currentStockPrice > 0 ? ((currentStockPrice - trade.strikePrice) / currentStockPrice) * 100 : 0;
-              const prem = trade.cumulativePremium || trade.premium;
-              const effectiveCost = Math.max(0, trade.strikePrice - prem).toFixed(2);
-              const netIncome = (prem * 100 * trade.contracts - trade.commissions).toFixed(2);
+              const basisCredit = trade.cumulativeCostBasisCredit || trade.cumulativePremium || trade.premium;
+              const effectiveCost = Math.max(0, trade.strikePrice - basisCredit).toFixed(2);
+              const netIncome = (trade.premium * 100 * trade.contracts - trade.commissions).toFixed(2);
               const collateral = trade.strikePrice * 100 * trade.contracts;
               const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
               const eRisk = checkEarningsRisk(trade.ticker, trade.expirationDate || trade.dte);

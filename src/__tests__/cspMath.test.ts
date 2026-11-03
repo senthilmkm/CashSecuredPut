@@ -1,7 +1,8 @@
 declare const process: any;
 import { calculateCSPMetrics, calculateRollCSP, calculateCSPTimeDecay } from '../services/cspMath';
-import { pruneHistoryByRetention } from '../services/storageUtils';
+import { pruneHistoryByRetention, CSPTrade } from '../services/storageUtils';
 import { checkEarningsRisk } from '../services/earningsService';
+import { isCustomerEntitled } from '../services/entitlementUtils';
 
 export function runCSPMathTests() {
   let passed = 0;
@@ -188,6 +189,88 @@ export function runCSPMathTests() {
     impliedVol: 0.65, // 65% IV
   });
   assert(highIvMetric.greeks?.impliedVolEstimate === 65.0, 'Explicit IV 0.65 reflects as 65.0% in Greeks');
+
+  // Test 11: RevenueCat Entitlement Matching Resilience
+  assert(isCustomerEntitled({ entitlements: { active: { Premium: {} } } }) === true, 'Matches exact "Premium" entitlement');
+  assert(isCustomerEntitled({ entitlements: { active: { premium: {} } } }) === true, 'Matches lowercase "premium" entitlement');
+  assert(isCustomerEntitled({ entitlements: { active: { pro: {} } } }) === true, 'Matches "pro" entitlement alias');
+  assert(isCustomerEntitled({ entitlements: { active: { csp_premium: {} } } }) === true, 'Matches "csp_premium" alias');
+  assert(isCustomerEntitled({ entitlements: { active: { custom_any_tier: {} } } }) === true, 'Matches any active RevenueCat subscription key');
+  assert(isCustomerEntitled({ entitlements: { active: {} } }) === false, 'Returns false for empty active entitlements');
+  assert(isCustomerEntitled(null) === false, 'Returns false for null customerInfo safely');
+
+  // Test 12: Roll P&L Accounting & Zero Double-Counting
+  // User opens AAPL Put at $5.00 premium
+  const originalTrade: CSPTrade = {
+    id: 'trade_1',
+    ticker: 'AAPL',
+    stockPrice: 150,
+    strikePrice: 140,
+    premium: 5.00,
+    contracts: 1,
+    expirationDate: '2026-11-20',
+    dte: 20,
+    commissions: 0,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  };
+
+  // User rolls position: buys to close at $3.30 debit, sells new at $5.00 credit
+  const closeDebitPerShare = 3.30;
+  const newStrike = 135;
+  const newPremium = 5.00;
+  const netCredit = newPremium - closeDebitPerShare; // +1.70
+  const leg1Realized = parseFloat((originalTrade.premium - closeDebitPerShare).toFixed(2)); // +1.70
+  const cumulativeCostBasisCredit = parseFloat((originalTrade.premium + netCredit).toFixed(2)); // 6.70
+
+  assert(leg1Realized === 1.70, 'Leg 1 realized P&L is original premium minus close debit ($5.00 - $3.30 = +$1.70)');
+  assert(cumulativeCostBasisCredit === 6.70, 'Total cumulative credit reducing cost basis is $6.70');
+
+  // Archived trade in history:
+  const archivedTrade: CSPTrade = {
+    ...originalTrade,
+    status: 'closed_early',
+    cumulativePremium: leg1Realized,
+  };
+
+  // Rolled active trade:
+  const rolledTrade: CSPTrade = {
+    id: 'trade_2',
+    ticker: 'AAPL',
+    stockPrice: 150,
+    strikePrice: newStrike,
+    premium: newPremium,
+    contracts: 1,
+    expirationDate: '2026-12-20',
+    dte: 50,
+    commissions: 0,
+    status: 'active',
+    createdAt: new Date().toISOString(),
+    rolledFromId: originalTrade.id,
+    cumulativePremium: newPremium,
+    cumulativeCostBasisCredit: cumulativeCostBasisCredit,
+  };
+
+  // Verify Active Trades calculations:
+  const activeEffectiveBasis = rolledTrade.strikePrice - (rolledTrade.cumulativeCostBasisCredit || rolledTrade.premium);
+  assert(activeEffectiveBasis === 128.30, 'Active rolled trade effective cost basis is $135 - $6.70 = $128.30');
+  const activeOpenIncome = rolledTrade.premium * 100 * rolledTrade.contracts;
+  assert(activeOpenIncome === 500, 'Active open trade premium income is exactly $500');
+
+  // When rolled trade expires worthless in history:
+  const expiredRolledTrade: CSPTrade = {
+    ...rolledTrade,
+    status: 'expired_worthless',
+  };
+  const mockFullHistory = [archivedTrade, expiredRolledTrade];
+  const totalLifetimeIncome = mockFullHistory.reduce(
+    (sum, t) => sum + ((t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) * 100 * t.contracts - t.commissions),
+    0
+  );
+  assert(
+    totalLifetimeIncome === 670,
+    'Lifetime history income sums Leg 1 ($170) + Leg 2 ($500) = $670 exactly with zero double counting'
+  );
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

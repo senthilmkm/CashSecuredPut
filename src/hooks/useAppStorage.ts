@@ -153,10 +153,18 @@ export function useAppStorage() {
     if (!originalTrade) return { success: false };
 
     const netCreditPerShare = rollDetails.newPremium - rollDetails.closeDebitPerShare;
-    const previousCumulative = originalTrade.cumulativePremium || originalTrade.premium;
-    const newCumulative = previousCumulative + netCreditPerShare;
+    const previousCumulativeBasis = originalTrade.cumulativeCostBasisCredit || originalTrade.cumulativePremium || originalTrade.premium;
+    const newCumulativeBasis = previousCumulativeBasis + netCreditPerShare;
 
-    const archivedOriginal: CSPTrade = { ...originalTrade, status: 'closed_early' };
+    // Realized P&L on Leg 1 = initial premium received minus debit paid to buy back / close
+    const leg1RealizedPremium = parseFloat((originalTrade.premium - rollDetails.closeDebitPerShare).toFixed(2));
+
+    const archivedOriginal: CSPTrade = {
+      ...originalTrade,
+      status: 'closed_early',
+      cumulativePremium: leg1RealizedPremium,
+      notes: `${originalTrade.notes ? originalTrade.notes + ' • ' : ''}Rolled to ${rollDetails.newStrike} Strike (Closed @ $${rollDetails.closeDebitPerShare.toFixed(2)})`,
+    };
     const updatedHistory = [archivedOriginal, ...history];
 
     const rolledTrade: CSPTrade = {
@@ -172,7 +180,8 @@ export function useAppStorage() {
       status: 'active',
       createdAt: new Date().toISOString(),
       rolledFromId: originalTrade.id,
-      cumulativePremium: parseFloat(newCumulative.toFixed(2)),
+      cumulativePremium: rollDetails.newPremium,
+      cumulativeCostBasisCredit: parseFloat(newCumulativeBasis.toFixed(2)),
       notes: `Rolled from ${originalTrade.strikePrice} Strike on ${new Date().toLocaleDateString()}`,
     };
 
@@ -208,9 +217,10 @@ export function useAppStorage() {
     setTrades([]);
     setHistory([]);
     await Promise.all([
-      AsyncStorage.removeItem(STORAGE_KEYS.TRADES),
-      AsyncStorage.removeItem(STORAGE_KEYS.HISTORY),
-      AsyncStorage.removeItem(STORAGE_KEYS.WHEEL),
+      AsyncStorage.setItem(STORAGE_KEYS.TRADES, JSON.stringify([])),
+      AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([])),
+      AsyncStorage.setItem(STORAGE_KEYS.WHEEL, JSON.stringify([])),
+      AsyncStorage.setItem('@csp_wheel_initialized', 'true'),
     ]);
   };
 

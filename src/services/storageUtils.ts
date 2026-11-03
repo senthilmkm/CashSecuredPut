@@ -13,6 +13,7 @@ export interface CSPTrade {
   createdAt: string;
   rolledFromId?: string;
   cumulativePremium?: number;
+  cumulativeCostBasisCredit?: number;
 }
 
 export function pruneHistoryByRetention(historyList: CSPTrade[], maxDays: number): CSPTrade[] {
