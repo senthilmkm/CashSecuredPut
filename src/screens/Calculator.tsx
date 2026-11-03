@@ -21,9 +21,12 @@ import {
   Target,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
+  Calendar,
 } from 'lucide-react-native';
 import { calculateCSPMetrics, CSPTradeMetrics } from '../services/cspMath';
 import { getMarketQuote, getPutOptionChain, CSPOptionContract } from '../services/publicApi';
+import { checkEarningsRisk, EarningsRiskResult } from '../services/earningsService';
 import PayoffChart from '../components/PayoffChart';
 
 interface CalculatorProps {
@@ -48,9 +51,12 @@ export default function Calculator({
   const [contracts, setContracts] = useState('1');
   const [dte, setDte] = useState('30');
   const [commissions, setCommissions] = useState('1.00');
+  const [customIv, setCustomIv] = useState('');
 
   const [fetchingQuote, setFetchingQuote] = useState(false);
   const [isSyncingDte, setIsSyncingDte] = useState(false);
+  const [isSimulatedData, setIsSimulatedData] = useState(false);
+  const [earningsRisk, setEarningsRisk] = useState<EarningsRiskResult>({ hasEarningsRisk: false });
   const [showAdvancedChart, setShowAdvancedChart] = useState(false);
   const [optionChain, setOptionChain] = useState<CSPOptionContract[]>([]);
   const [selectedContract, setSelectedContract] = useState<CSPOptionContract | null>(null);
@@ -97,6 +103,7 @@ export default function Calculator({
     const cnt = parseInt(contracts, 10) || 1;
     const days = parseInt(dte, 10) || 1;
     const comm = parseFloat(commissions) || 0;
+    const parsedIv = parseFloat(customIv) > 0 ? parseFloat(customIv) / 100 : undefined;
 
     const res = calculateCSPMetrics({
       stockPrice: sPrice,
@@ -105,10 +112,12 @@ export default function Calculator({
       contracts: cnt,
       dte: days,
       commissions: comm,
+      impliedVol: parsedIv,
+      earningsDate: earningsRisk.hasEarningsRisk ? earningsRisk.earningsDate : undefined,
     });
 
     setMetrics(res);
-  }, [stockPrice, strikePrice, premium, contracts, dte, commissions]);
+  }, [stockPrice, strikePrice, premium, contracts, dte, commissions, customIv, earningsRisk]);
 
   // Initial quote fetch on mount
   useEffect(() => {
@@ -137,6 +146,14 @@ export default function Calculator({
       if (reqId !== quoteRequestId.current || !isMountedRef.current) return;
       setOptionChain(chain);
 
+      // Track whether live market data vs simulated mock was received
+      const isMock = !!(quote?.isMocked || (chain.length > 0 && chain[0]?.isMocked));
+      setIsSimulatedData(isMock);
+
+      // Check earnings risk within this expiration timeframe
+      const eRisk = checkEarningsRisk(cleanSymbol, currentDte);
+      setEarningsRisk(eRisk);
+
       if (chain.length > 0) {
         // Pick best matching expiration date to current target DTE
         const uniqueExps = Array.from(new Set(chain.map((c) => c.expiration))).sort();
@@ -162,16 +179,21 @@ export default function Calculator({
           setSelectedContract(nearest);
           setStrikePrice(nearest.strike.toFixed(2));
           setPremium(nearest.premium.toFixed(2));
+          if (typeof nearest.impliedVolatility === 'number' && nearest.impliedVolatility > 0) {
+            setCustomIv((nearest.impliedVolatility * 100).toFixed(1));
+          }
           if (nearest.expiration) {
             const expTime = new Date(nearest.expiration + 'T16:00:00Z').getTime();
             const nowTime = Date.now();
             const days = Math.max(1, Math.round((expTime - nowTime) / (1000 * 60 * 60 * 24)));
             setDte(days.toString());
+            const updatedRisk = checkEarningsRisk(cleanSymbol, days);
+            setEarningsRisk(updatedRisk);
           }
         }
       }
     } catch (error) {
-      // Fallback allowed
+      setIsSimulatedData(true);
     } finally {
       if (reqId === quoteRequestId.current && isMountedRef.current) {
         setFetchingQuote(false);
@@ -194,6 +216,14 @@ export default function Calculator({
       if (reqId !== quoteRequestId.current || !isMountedRef.current) return;
 
       setOptionChain(chain);
+      if (chain.length > 0 && chain[0]?.isMocked) {
+        setIsSimulatedData(true);
+      }
+
+      // Check earnings risk for new target DTE
+      const eRisk = checkEarningsRisk(cleanSymbol, targetDteNum);
+      setEarningsRisk(eRisk);
+
       if (chain.length > 0) {
         const uniqueExps = Array.from(new Set(chain.map((c) => c.expiration))).sort();
         let bestExp = uniqueExps[0];
@@ -219,6 +249,9 @@ export default function Calculator({
           setSelectedContract(nearest);
           setStrikePrice(nearest.strike.toFixed(2));
           setPremium(nearest.premium.toFixed(2));
+          if (typeof nearest.impliedVolatility === 'number' && nearest.impliedVolatility > 0) {
+            setCustomIv((nearest.impliedVolatility * 100).toFixed(1));
+          }
         }
       }
     } catch (e) {
@@ -259,11 +292,16 @@ export default function Calculator({
     setSelectedContract(contract);
     setStrikePrice(contract.strike.toFixed(2));
     setPremium(contract.premium.toFixed(2));
+    if (typeof contract.impliedVolatility === 'number' && contract.impliedVolatility > 0) {
+      setCustomIv((contract.impliedVolatility * 100).toFixed(1));
+    }
     if (contract.expiration) {
       const expTime = new Date(contract.expiration + 'T16:00:00Z').getTime();
       const nowTime = Date.now();
       const days = Math.max(1, Math.round((expTime - nowTime) / (1000 * 60 * 60 * 24)));
       setDte(days.toString());
+      const eRisk = checkEarningsRisk(ticker, days);
+      setEarningsRisk(eRisk);
     }
   };
 
@@ -278,23 +316,39 @@ export default function Calculator({
       ? selectedContract.expiration
       : new Date(Date.now() + (parseInt(dte, 10) || 30) * 86400000).toISOString().split('T')[0];
 
-    const tradeData = {
-      ticker: ticker.trim().toUpperCase(),
-      stockPrice: parseFloat(stockPrice),
-      strikePrice: sStrike,
-      premium: parseFloat(premium),
-      contracts: parseInt(contracts, 10) || 1,
-      dte: parseInt(dte, 10) || 30,
-      expirationDate: exactExpiration,
-      commissions: parseFloat(commissions) || 0,
+    const executeSave = async () => {
+      const tradeData = {
+        ticker: ticker.trim().toUpperCase(),
+        stockPrice: parseFloat(stockPrice),
+        strikePrice: sStrike,
+        premium: parseFloat(premium),
+        contracts: parseInt(contracts, 10) || 1,
+        dte: parseInt(dte, 10) || 30,
+        expirationDate: exactExpiration,
+        commissions: parseFloat(commissions) || 0,
+      };
+
+      const result = await onSaveTrade(tradeData);
+      if (result.paywallTriggered) {
+        onOpenPaywall();
+      } else if (result.success) {
+        Alert.alert('Trade Saved!', `${tradeData.ticker} Put option saved to your portfolio.`);
+      }
     };
 
-    const result = await onSaveTrade(tradeData);
-    if (result.paywallTriggered) {
-      onOpenPaywall();
-    } else if (result.success) {
-      Alert.alert('Trade Saved!', `${tradeData.ticker} Put option saved to your portfolio.`);
+    if (isSimulatedData) {
+      Alert.alert(
+        'Simulated Data Notice',
+        'This trade was calculated using estimated / simulated market data because live feeds were offline. Ensure you verify live strikes and bid/ask quotes with your broker before committing real funds.\n\nSave to active portfolio anyway?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save Anyway', onPress: executeSave },
+        ]
+      );
+      return;
     }
+
+    await executeSave();
   };
 
   const getScoreColor = (score: number) => {
@@ -317,6 +371,34 @@ export default function Calculator({
         keyboardShouldPersistTaps="handled"
       >
         
+        {/* SIMULATED / MOCK DATA WARNING BANNER */}
+        {isSimulatedData && (
+          <View style={styles.simulatedBanner}>
+            <AlertTriangle size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.simulatedBannerTitle}>Simulated Market Data</Text>
+              <Text style={styles.simulatedBannerDesc}>
+                Live broker feed is currently unavailable. Strikes and option prices are estimated models. Verify live quotes with your broker before trading.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* EARNINGS CLIFF RISK WARNING BANNER */}
+        {earningsRisk.hasEarningsRisk && (
+          <View style={styles.earningsBanner}>
+            <Calendar size={16} color="#EF4444" style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.earningsBannerTitle}>
+                Earnings Risk: {ticker.toUpperCase()} on {earningsRisk.earningsDate}
+              </Text>
+              <Text style={styles.earningsBannerDesc}>
+                Earnings release scheduled {earningsRisk.daysUntilEarnings === 0 ? 'today' : `in ${earningsRisk.daysUntilEarnings} days`}, before this option expires. High risk of volatility collapse and post-earnings gap down.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* 1. HERO SCORECARD & HEALTH GAUGE CARD */}
         {metrics && (
           <View style={styles.scoreCard}>
@@ -377,31 +459,58 @@ export default function Calculator({
 
             {/* Delta & Probability of Profit Banner */}
             {showAdvancedChart && metrics.greeks && (
-              <View style={styles.greeksBar}>
-                <View style={styles.greekItem}>
-                  <Text style={styles.greekLabel}>Delta</Text>
-                  <Text style={styles.greekVal}>{metrics.greeks.delta}</Text>
+              <View>
+                <View style={styles.greeksBar}>
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Delta</Text>
+                    <Text style={styles.greekVal}>{metrics.greeks.delta}</Text>
+                  </View>
+
+                  <View style={styles.greekDivider} />
+
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Prob of Profit</Text>
+                    <Text style={styles.greekValSuccess}>{metrics.greeks.probabilityOfProfit}%</Text>
+                  </View>
+
+                  <View style={styles.greekDivider} />
+
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Assignment</Text>
+                    <Text style={metrics.greeks.probabilityAssignment > 30 ? styles.greekValDanger : styles.greekVal}>{metrics.greeks.probabilityAssignment}%</Text>
+                  </View>
+
+                  <View style={styles.greekDivider} />
+
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>$\theta$ Decay</Text>
+                    <Text style={styles.greekVal}>+${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d</Text>
+                  </View>
+
+                  <View style={styles.greekDivider} />
+
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Implied Vol</Text>
+                    <Text style={styles.greekVal}>{metrics.greeks.impliedVolEstimate}%</Text>
+                  </View>
                 </View>
 
-                <View style={styles.greekDivider} />
-
-                <View style={styles.greekItem}>
-                  <Text style={styles.greekLabel}>Prob of Profit (POP)</Text>
-                  <Text style={styles.greekValSuccess}>{metrics.greeks.probabilityOfProfit}%</Text>
-                </View>
-
-                <View style={styles.greekDivider} />
-
-                <View style={styles.greekItem}>
-                  <Text style={styles.greekLabel}>Prob Assignment</Text>
-                  <Text style={metrics.greeks.probabilityAssignment > 30 ? styles.greekValDanger : styles.greekVal}>{metrics.greeks.probabilityAssignment}%</Text>
-                </View>
-
-                <View style={styles.greekDivider} />
-
-                <View style={styles.greekItem}>
-                  <Text style={styles.greekLabel}>Time Decay ($\theta$)</Text>
-                  <Text style={styles.greekVal}>+${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/day</Text>
+                {/* IV Override Input */}
+                <View style={styles.ivRow}>
+                  <Text style={styles.ivLabel}>Custom IV %:</Text>
+                  <TextInput
+                    style={styles.ivInput}
+                    value={customIv}
+                    onChangeText={setCustomIv}
+                    placeholder={`${metrics.greeks.impliedVolEstimate}%`}
+                    placeholderTextColor="#64748B"
+                    keyboardType="numeric"
+                  />
+                  {customIv ? (
+                    <TouchableOpacity onPress={() => setCustomIv('')} style={styles.ivResetBtn}>
+                      <Text style={styles.ivResetText}>Reset</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
             )}
@@ -1114,6 +1223,83 @@ const styles = StyleSheet.create({
   zeroDteBannerText: {
     color: '#FCD34D',
     fontSize: 11.5,
+    fontWeight: '700',
+  },
+  simulatedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D97706',
+    padding: 10,
+    marginBottom: 10,
+  },
+  simulatedBannerTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#F59E0B',
+    marginBottom: 2,
+  },
+  simulatedBannerDesc: {
+    fontSize: 11,
+    color: '#FDE68A',
+    lineHeight: 15,
+  },
+  earningsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    padding: 10,
+    marginBottom: 10,
+  },
+  earningsBannerTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#EF4444',
+    marginBottom: 2,
+  },
+  earningsBannerDesc: {
+    fontSize: 11,
+    color: '#FCA5A5',
+    lineHeight: 15,
+  },
+  ivRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0B0F19',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 8,
+  },
+  ivLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginRight: 6,
+  },
+  ivInput: {
+    flex: 1,
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingVertical: 2,
+  },
+  ivResetBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#1E293B',
+    borderRadius: 4,
+  },
+  ivResetText: {
+    color: '#60A5FA',
+    fontSize: 10,
     fontWeight: '700',
   },
 });

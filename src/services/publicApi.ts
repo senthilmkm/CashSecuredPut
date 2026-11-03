@@ -105,6 +105,8 @@ export async function fetchPutOptionChainFromProxy(
         ask: item.ask || 0,
         last: item.last || item.premium || 0,
         premium: item.premium || item.last || 0,
+        impliedVolatility: typeof item.impliedVolatility === 'number' ? item.impliedVolatility : typeof item.iv === 'number' ? item.iv : undefined,
+        isMocked: false,
       }));
     }
   }

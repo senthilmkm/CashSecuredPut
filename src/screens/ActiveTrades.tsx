@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,8 @@ import {
   Linking,
   Modal,
   Platform,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -33,6 +35,8 @@ import {
 } from 'lucide-react-native';
 import { CSPTrade } from '../hooks/useAppStorage';
 import { exportPortfolioPDF, exportPortfolioCSV, calculateDaysRemaining } from '../services/exportService';
+import { getMarketQuote } from '../services/publicApi';
+import { checkEarningsRisk } from '../services/earningsService';
 
 interface ActiveTradesProps {
   trades: CSPTrade[];
@@ -62,13 +66,63 @@ export default function ActiveTrades({
   const [exportData, setExportData] = useState<{ ticker: string; costBasis: string; shares: number } | null>(null);
   const [exportTradeObj, setExportTradeObj] = useState<CSPTrade | null>(null);
 
+  // Live Portfolio Market Quotes
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, { price: number; change: number; changePercent: number; updatedAt: number }>>({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const lastFetchRef = useRef<number>(0);
+
+  const refreshPortfolioQuotes = useCallback(async (force = false) => {
+    if (trades.length === 0) return;
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < 15000) return;
+    lastFetchRef.current = now;
+
+    setIsRefreshing(true);
+    const uniqueTickers = Array.from(new Set(trades.map((t) => t.ticker.toUpperCase().trim())));
+
+    try {
+      const results = await Promise.allSettled(
+        uniqueTickers.map(async (ticker) => {
+          const q = await getMarketQuote(ticker);
+          return { ticker, quote: q };
+        })
+      );
+
+      setLiveQuotes((prev) => {
+        const next = { ...prev };
+        results.forEach((res) => {
+          if (res.status === 'fulfilled' && res.value?.quote?.price > 0) {
+            next[res.value.ticker] = {
+              price: res.value.quote.price,
+              change: res.value.quote.change || 0,
+              changePercent: res.value.quote.changePercent || 0,
+              updatedAt: Date.now(),
+            };
+          }
+        });
+        return next;
+      });
+    } catch (err) {
+      console.warn('[ActiveTrades] Failed to refresh portfolio quotes:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [trades]);
+
+  useEffect(() => {
+    refreshPortfolioQuotes();
+  }, [refreshPortfolioQuotes]);
+
+  const getTradeStockPrice = (t: CSPTrade) => liveQuotes[t.ticker]?.price ?? t.stockPrice;
+
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
   const totalPremium = trades.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
   const totalLifetimeRealized = history.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
-  const itmCount = trades.filter((t) => t.strikePrice > t.stockPrice).length;
+  const itmCount = trades.filter((t) => t.strikePrice > getTradeStockPrice(t)).length;
 
   const filteredTrades = trades.filter((t) => {
-    const isITM = t.strikePrice > t.stockPrice;
+    const curStock = getTradeStockPrice(t);
+    const isITM = t.strikePrice > curStock;
     const dteLeft = calculateDaysRemaining(t.expirationDate, t.dte);
     if (selectedFilter === 'itm') return isITM;
     if (selectedFilter === 'expiring') return dteLeft <= 5;
@@ -133,29 +187,56 @@ export default function ActiveTrades({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={() => refreshPortfolioQuotes(true)}
+          tintColor="#3B82F6"
+          colors={['#3B82F6']}
+        />
+      }
+    >
       {/* Portfolio View Mode Segmented Selector */}
-      <View style={styles.viewModeSegment}>
-        <TouchableOpacity
-          style={[styles.segmentBtn, viewMode === 'active' && styles.segmentBtnActive]}
-          onPress={() => setViewMode('active')}
-          activeOpacity={0.8}
-        >
-          <Briefcase size={14} color={viewMode === 'active' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
-          <Text style={[styles.segmentText, viewMode === 'active' && styles.segmentTextActive]}>
-            Active Trades ({trades.length})
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.viewModeHeader}>
+        <View style={styles.viewModeSegment}>
+          <TouchableOpacity
+            style={[styles.segmentBtn, viewMode === 'active' && styles.segmentBtnActive]}
+            onPress={() => setViewMode('active')}
+            activeOpacity={0.8}
+          >
+            <Briefcase size={14} color={viewMode === 'active' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+            <Text style={[styles.segmentText, viewMode === 'active' && styles.segmentTextActive]}>
+              Active ({trades.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.segmentBtn, viewMode === 'history' && styles.segmentBtnActive]}
+            onPress={() => setViewMode('history')}
+            activeOpacity={0.8}
+          >
+            <Clock size={14} color={viewMode === 'history' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
+            <Text style={[styles.segmentText, viewMode === 'history' && styles.segmentTextActive]}>
+              History ({history.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
-          style={[styles.segmentBtn, viewMode === 'history' && styles.segmentBtnActive]}
-          onPress={() => setViewMode('history')}
+          style={styles.refreshQuoteBtn}
+          onPress={() => refreshPortfolioQuotes(true)}
+          disabled={isRefreshing}
           activeOpacity={0.8}
         >
-          <Clock size={14} color={viewMode === 'history' ? '#FFF' : '#64748B'} style={{ marginRight: 6 }} />
-          <Text style={[styles.segmentText, viewMode === 'history' && styles.segmentTextActive]}>
-            Trade History ({history.length})
-          </Text>
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color="#3B82F6" />
+          ) : (
+            <RefreshCw size={13} color="#60A5FA" />
+          )}
         </TouchableOpacity>
       </View>
       {/* Overview Summary Cards (Active vs History) */}
@@ -368,29 +449,41 @@ export default function ActiveTrades({
             </View>
           ) : (
             filteredTrades.map((trade) => {
-              const isITM = trade.strikePrice > trade.stockPrice;
+              const liveQuote = liveQuotes[trade.ticker];
+              const currentStockPrice = liveQuote?.price ?? trade.stockPrice;
+              const isITM = trade.strikePrice > currentStockPrice;
+              const cushionPercent = currentStockPrice > 0 ? ((currentStockPrice - trade.strikePrice) / currentStockPrice) * 100 : 0;
               const prem = trade.cumulativePremium || trade.premium;
               const effectiveCost = Math.max(0, trade.strikePrice - prem).toFixed(2);
               const netIncome = (prem * 100 * trade.contracts - trade.commissions).toFixed(2);
               const collateral = trade.strikePrice * 100 * trade.contracts;
               const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
+              const eRisk = checkEarningsRisk(trade.ticker, trade.expirationDate || trade.dte);
 
               if (cardLayout === 'compact') {
                 return (
                   <View key={trade.id} style={styles.compactCard}>
-                    <View style={{ flex: 1.2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flex: 1.3 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
                         <Text style={styles.compactTicker}>{trade.ticker}</Text>
                         <View style={[styles.statusTag, isITM ? styles.tagITM : styles.tagOTM, { marginLeft: 6 }]}>
                           <Text style={[styles.tagText, isITM ? styles.tagTextITM : styles.tagTextOTM, { fontSize: 10 }]}>
                             {isITM ? 'ITM' : 'OTM'}
                           </Text>
                         </View>
+                        {eRisk.hasEarningsRisk && (
+                          <View style={styles.compactEarningsTag}>
+                            <Text style={styles.compactEarningsText}>⚠️ ER {eRisk.daysUntilEarnings}d</Text>
+                          </View>
+                        )}
                       </View>
-                      <Text style={styles.compactSub}>${trade.strikePrice.toFixed(2)} Put • {dteLeft}d left</Text>
+                      <Text style={styles.compactSub}>
+                        ${trade.strikePrice.toFixed(2)} Put • Live: ${currentStockPrice.toFixed(2)}
+                        {liveQuote ? ` (${liveQuote.changePercent >= 0 ? '+' : ''}${liveQuote.changePercent.toFixed(1)}%)` : ''} • {dteLeft}d left
+                      </Text>
                     </View>
 
-                    <View style={{ flex: 1, alignItems: 'flex-end', marginRight: 10 }}>
+                    <View style={{ flex: 0.9, alignItems: 'flex-end', marginRight: 10 }}>
                       <Text style={styles.compactIncome}>+${netIncome}</Text>
                       <Text style={styles.compactSub}>Basis: ${effectiveCost}</Text>
                     </View>
@@ -425,6 +518,11 @@ export default function ActiveTrades({
                       {isITM ? 'ITM Risk' : 'OTM Profitable'}
                     </Text>
                   </View>
+                  {eRisk.hasEarningsRisk && (
+                    <View style={styles.earningsTag}>
+                      <Text style={styles.earningsTagText}>⚠️ Earnings {eRisk.earningsDate}</Text>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.dteBadge}>
@@ -435,8 +533,13 @@ export default function ActiveTrades({
 
               <View style={styles.tradeGrid}>
                 <View style={styles.tradeCol}>
-                  <Text style={styles.tradeLabel}>Strike / Stock</Text>
-                  <Text style={styles.tradeVal}>${trade.strikePrice.toFixed(2)} / ${trade.stockPrice.toFixed(2)}</Text>
+                  <Text style={styles.tradeLabel}>Strike / Live Stock</Text>
+                  <Text style={styles.tradeVal}>${trade.strikePrice.toFixed(2)} / ${currentStockPrice.toFixed(2)}</Text>
+                  <Text style={[styles.tradeCushionSub, { color: isITM ? '#EF4444' : '#10B981' }]}>
+                    {isITM
+                      ? `-$${Math.abs(currentStockPrice - trade.strikePrice).toFixed(2)} ITM`
+                      : `+${cushionPercent.toFixed(1)}% cushion`}
+                  </Text>
                 </View>
 
                 <View style={styles.tradeCol}>
@@ -1007,4 +1110,54 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
-});
+  viewModeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  refreshQuoteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#161E2E',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  compactEarningsTag: {
+    backgroundColor: '#451A03',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#D97706',
+    marginLeft: 5,
+  },
+  compactEarningsText: {
+    color: '#FDE68A',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  earningsTag: {
+    backgroundColor: '#451A03',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D97706',
+    marginLeft: 6,
+  },
+  earningsTagText: {
+    color: '#FDE68A',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  tradeCushionSub: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+});

@@ -27,6 +27,8 @@ export function calculateCSPMetrics(params: {
   dte: number;              // Days to Expiration
   commissions?: number;     // Optional transaction fees
   treasuryRate?: number;    // Risk-free rate benchmark (default 5.0%)
+  impliedVol?: number;      // Optional IV % (e.g. 0.35 for 35%)
+  earningsDate?: string;    // Optional earnings announcement date (YYYY-MM-DD)
 }): CSPTradeMetrics {
   const {
     stockPrice,
@@ -36,6 +38,8 @@ export function calculateCSPMetrics(params: {
     dte = 1,
     commissions = 0,
     treasuryRate = 5.0,
+    impliedVol,
+    earningsDate,
   } = params;
 
   // Sanitize & validate inputs to prevent edge case crashes or NaNs
@@ -151,6 +155,12 @@ export function calculateCSPMetrics(params: {
     recommendationTitle = 'In-The-Money (High Assignment Risk)';
     recommendationDesc = `The Strike ($${validStrike.toFixed(2)}) is higher than current stock price ($${validStock.toFixed(2)}). High likelihood of assignment at net cost basis of $${effectiveCostBasis.toFixed(2)}.`;
     recommendationType = 'danger';
+  } else if (earningsDate) {
+    // If trade expiration spans an earnings event, flag binary risk
+    score = Math.min(score, 60);
+    recommendationTitle = '⚠️ Caution: Earnings Release Imminent';
+    recommendationType = 'warning';
+    recommendationDesc = `Earnings announcement expected on ${earningsDate} before expiration. High risk of volatility collapse and post-earnings gap down. Only proceed if you are comfortable being assigned.`;
   } else if (score >= 70) {
     recommendationTitle = 'Prime Cash-Secured Put Opportunity';
     recommendationType = 'success';
@@ -174,6 +184,7 @@ export function calculateCSPMetrics(params: {
     strikePrice: validStrike,
     premium: validPremium,
     dte: validDte,
+    impliedVol: impliedVol && impliedVol > 0 ? impliedVol : undefined,
   });
 
   return {

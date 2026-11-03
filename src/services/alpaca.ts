@@ -13,6 +13,7 @@ export interface CSPOptionContract {
   ask: number;
   last: number;
   premium: number;
+  impliedVolatility?: number;
   isMocked?: boolean;
 }
 

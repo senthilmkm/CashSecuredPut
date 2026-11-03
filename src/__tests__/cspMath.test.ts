@@ -1,6 +1,7 @@
 declare const process: any;
 import { calculateCSPMetrics, calculateRollCSP, calculateCSPTimeDecay } from '../services/cspMath';
 import { pruneHistoryByRetention } from '../services/storageUtils';
+import { checkEarningsRisk } from '../services/earningsService';
 
 export function runCSPMathTests() {
   let passed = 0;
@@ -157,6 +158,36 @@ export function runCSPMathTests() {
 
   const prunedForever = pruneHistoryByRetention(mockHistory, 9999);
   assert(prunedForever.length === 3, 'Retention 9999 preserves all historical records indefinitely');
+
+  // Test 9: Earnings Risk Detection
+  const nvdaEarningsRisk = checkEarningsRisk('NVDA', 30);
+  assert(nvdaEarningsRisk.hasEarningsRisk === true, 'NVDA 30 DTE detects upcoming earnings announcement');
+  assert(nvdaEarningsRisk.earningsDate !== undefined, 'Earnings date returned for NVDA');
+
+  const spyEarningsRisk = checkEarningsRisk('SPY', 30);
+  assert(spyEarningsRisk.hasEarningsRisk === false, 'Index ETF SPY has no single-stock earnings risk');
+
+  const earningsMetric = calculateCSPMetrics({
+    stockPrice: 150,
+    strikePrice: 140,
+    premium: 4.50,
+    contracts: 1,
+    dte: 30,
+    earningsDate: '2026-11-18',
+  });
+  assert(earningsMetric.score <= 60, 'Earnings risk caps score to maximum 60');
+  assert(earningsMetric.recommendationType === 'warning', 'Earnings risk marks recommendation as warning');
+
+  // Test 10: Explicit IV Pass-Through to Greeks
+  const highIvMetric = calculateCSPMetrics({
+    stockPrice: 150,
+    strikePrice: 140,
+    premium: 4.50,
+    contracts: 1,
+    dte: 30,
+    impliedVol: 0.65, // 65% IV
+  });
+  assert(highIvMetric.greeks?.impliedVolEstimate === 65.0, 'Explicit IV 0.65 reflects as 65.0% in Greeks');
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
