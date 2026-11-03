@@ -28,6 +28,8 @@ import {
   X,
   ArrowRight,
   RotateCcw,
+  LayoutGrid,
+  List,
 } from 'lucide-react-native';
 import { CSPTrade } from '../hooks/useAppStorage';
 import { exportPortfolioPDF, exportPortfolioCSV, calculateDaysRemaining } from '../services/exportService';
@@ -55,6 +57,7 @@ export default function ActiveTrades({
 }: ActiveTradesProps) {
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'itm' | 'expiring'>('all');
+  const [cardLayout, setCardLayout] = useState<'detailed' | 'compact'>('detailed');
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exportData, setExportData] = useState<{ ticker: string; costBasis: string; shares: number } | null>(null);
   const [exportTradeObj, setExportTradeObj] = useState<CSPTrade | null>(null);
@@ -62,6 +65,7 @@ export default function ActiveTrades({
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
   const totalPremium = trades.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
   const totalLifetimeRealized = history.reduce((sum, t) => sum + (t.cumulativePremium || t.premium) * 100 * t.contracts - t.commissions, 0);
+  const itmCount = trades.filter((t) => t.strikePrice > t.stockPrice).length;
 
   const filteredTrades = trades.filter((t) => {
     const isITM = t.strikePrice > t.stockPrice;
@@ -293,52 +297,126 @@ export default function ActiveTrades({
         )
       ) : (
         <>
-          {/* Filter Tabs */}
-      <View style={styles.filterRow}>
-        <TouchableOpacity
-          style={[styles.filterChip, selectedFilter === 'all' && styles.filterChipActive]}
-          onPress={() => setSelectedFilter('all')}
-        >
-          <Text style={[styles.filterChipText, selectedFilter === 'all' && styles.filterTextActive]}>All ({trades.length})</Text>
-        </TouchableOpacity>
+          {/* ITM Risk Alert Banner */}
+          {itmCount > 0 && (
+            <TouchableOpacity
+              style={styles.itmAlertBanner}
+              onPress={() => setSelectedFilter(selectedFilter === 'itm' ? 'all' : 'itm')}
+              activeOpacity={0.8}
+            >
+              <AlertCircle size={15} color="#EF4444" style={{ marginRight: 8 }} />
+              <Text style={styles.itmAlertText}>
+                ⚠️ {itmCount} Position{itmCount > 1 ? 's' : ''} In-The-Money (Assignment Risk) • Tap to Filter
+              </Text>
+            </TouchableOpacity>
+          )}
 
-        <TouchableOpacity
-          style={[styles.filterChip, selectedFilter === 'itm' && styles.filterChipActive]}
-          onPress={() => setSelectedFilter('itm')}
-        >
-          <Text style={[styles.filterChipText, selectedFilter === 'itm' && styles.filterTextActive]}>ITM Risk</Text>
-        </TouchableOpacity>
+          {/* Filter Row with Compact vs Detailed Switcher */}
+          <View style={styles.filterControlRow}>
+            <View style={styles.filterRow}>
+              <TouchableOpacity
+                style={[styles.filterChip, selectedFilter === 'all' && styles.filterChipActive]}
+                onPress={() => setSelectedFilter('all')}
+              >
+                <Text style={[styles.filterChipText, selectedFilter === 'all' && styles.filterTextActive]}>All ({trades.length})</Text>
+              </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.filterChip, selectedFilter === 'expiring' && styles.filterChipActive]}
-          onPress={() => setSelectedFilter('expiring')}
-        >
-          <Text style={[styles.filterChipText, selectedFilter === 'expiring' && styles.filterTextActive]}>Expiring Soon</Text>
-        </TouchableOpacity>
-      </View>
+              <TouchableOpacity
+                style={[styles.filterChip, selectedFilter === 'itm' && styles.filterChipActive]}
+                onPress={() => setSelectedFilter('itm')}
+              >
+                <Text style={[styles.filterChipText, selectedFilter === 'itm' && styles.filterTextActive]}>ITM Risk ({itmCount})</Text>
+              </TouchableOpacity>
 
-      {/* Empty State */}
-      {filteredTrades.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Briefcase color="#475569" size={48} style={{ marginBottom: 12 }} />
-          <Text style={styles.emptyTitle}>No Active CSP Positions</Text>
-          <Text style={styles.emptySub}>
-            {trades.length === 0
-              ? 'Use the Analyzer tab to calculate and save your first Cash-Secured Put trade.'
-              : 'No trades match the selected filter.'}
-          </Text>
-        </View>
-      ) : (
-        filteredTrades.map((trade) => {
-          const isITM = trade.strikePrice > trade.stockPrice;
-          const prem = trade.cumulativePremium || trade.premium;
-          const effectiveCost = Math.max(0, trade.strikePrice - prem).toFixed(2);
-          const netIncome = (prem * 100 * trade.contracts - trade.commissions).toFixed(2);
-          const collateral = trade.strikePrice * 100 * trade.contracts;
-          const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
+              <TouchableOpacity
+                style={[styles.filterChip, selectedFilter === 'expiring' && styles.filterChipActive]}
+                onPress={() => setSelectedFilter('expiring')}
+              >
+                <Text style={[styles.filterChipText, selectedFilter === 'expiring' && styles.filterTextActive]}>≤5 DTE</Text>
+              </TouchableOpacity>
+            </View>
 
-          return (
-            <View key={trade.id} style={styles.tradeCard}>
+            {/* Layout Toggle */}
+            <View style={styles.layoutSwitch}>
+              <TouchableOpacity
+                style={[styles.layoutSwitchBtn, cardLayout === 'detailed' && styles.layoutSwitchBtnActive]}
+                onPress={() => setCardLayout('detailed')}
+                activeOpacity={0.8}
+              >
+                <LayoutGrid size={13} color={cardLayout === 'detailed' ? '#FFF' : '#64748B'} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.layoutSwitchBtn, cardLayout === 'compact' && styles.layoutSwitchBtnActive]}
+                onPress={() => setCardLayout('compact')}
+                activeOpacity={0.8}
+              >
+                <List size={13} color={cardLayout === 'compact' ? '#FFF' : '#64748B'} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Empty State */}
+          {filteredTrades.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Briefcase color="#475569" size={48} style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyTitle}>No Active CSP Positions</Text>
+              <Text style={styles.emptySub}>
+                {trades.length === 0
+                  ? 'Use the Analyzer tab to calculate and save your first Cash-Secured Put trade.'
+                  : 'No trades match the selected filter.'}
+              </Text>
+            </View>
+          ) : (
+            filteredTrades.map((trade) => {
+              const isITM = trade.strikePrice > trade.stockPrice;
+              const prem = trade.cumulativePremium || trade.premium;
+              const effectiveCost = Math.max(0, trade.strikePrice - prem).toFixed(2);
+              const netIncome = (prem * 100 * trade.contracts - trade.commissions).toFixed(2);
+              const collateral = trade.strikePrice * 100 * trade.contracts;
+              const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
+
+              if (cardLayout === 'compact') {
+                return (
+                  <View key={trade.id} style={styles.compactCard}>
+                    <View style={{ flex: 1.2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.compactTicker}>{trade.ticker}</Text>
+                        <View style={[styles.statusTag, isITM ? styles.tagITM : styles.tagOTM, { marginLeft: 6 }]}>
+                          <Text style={[styles.tagText, isITM ? styles.tagTextITM : styles.tagTextOTM, { fontSize: 10 }]}>
+                            {isITM ? 'ITM' : 'OTM'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.compactSub}>${trade.strikePrice.toFixed(2)} Put • {dteLeft}d left</Text>
+                    </View>
+
+                    <View style={{ flex: 1, alignItems: 'flex-end', marginRight: 10 }}>
+                      <Text style={styles.compactIncome}>+${netIncome}</Text>
+                      <Text style={styles.compactSub}>Basis: ${effectiveCost}</Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <TouchableOpacity
+                        style={styles.compactActionBtn}
+                        onPress={() => onRollTrade(trade)}
+                        activeOpacity={0.8}
+                      >
+                        <RotateCcw size={14} color="#3B82F6" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.compactActionBtn, { marginLeft: 6 }]}
+                        onPress={() => onUpdateStatus(trade.id, 'expired_worthless')}
+                        activeOpacity={0.8}
+                      >
+                        <CheckCircle2 size={14} color="#10B981" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <View key={trade.id} style={styles.tradeCard}>
               <View style={styles.cardTopRow}>
                 <View style={styles.tickerGroup}>
                   <Text style={styles.tickerText}>{trade.ticker}</Text>
@@ -573,9 +651,86 @@ const styles = StyleSheet.create({
     color: '#DDD6FE',
     fontSize: 11,
   },
+  itmAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  itmAlertText: {
+    color: '#FCA5A5',
+    fontSize: 12.5,
+    fontWeight: '700',
+    flex: 1,
+  },
+  filterControlRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   filterRow: {
     flexDirection: 'row',
-    marginBottom: 16,
+    flex: 1,
+  },
+  layoutSwitch: {
+    flexDirection: 'row',
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    padding: 2,
+    marginLeft: 6,
+  },
+  layoutSwitchBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  layoutSwitchBtnActive: {
+    backgroundColor: '#1E293B',
+  },
+  compactCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactTicker: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  compactSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  compactIncome: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  compactActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   filterChip: {
     paddingHorizontal: 14,

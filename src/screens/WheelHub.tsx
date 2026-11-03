@@ -23,7 +23,11 @@ import {
   Sparkles,
   Crown,
   ChevronRight,
+  Trophy,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
+import { getMarketQuote } from '../services/publicApi';
 
 export interface WheelPosition {
   id: string;
@@ -69,6 +73,31 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
   const [ccPremium, setCcPremium] = useState('');
   const [ccDte, setCcDte] = useState('30');
   const [ccModalVisible, setCcModalVisible] = useState(false);
+  const [showCompletedArchive, setShowCompletedArchive] = useState(false);
+  const [fetchingCcQuote, setFetchingCcQuote] = useState(false);
+
+  const handleOpenAddCoveredCall = async (pos: WheelPosition) => {
+    setSelectedPosition(pos);
+    const fallbackStrike = (pos.initialStrike * 1.05).toFixed(2);
+    setCcStrike(fallbackStrike);
+    setCcPremium('2.50');
+    setCcDte('30');
+    setCcModalVisible(true);
+
+    try {
+      setFetchingCcQuote(true);
+      const quote = await getMarketQuote(pos.ticker);
+      if (quote && quote.price > 0) {
+        // Automatically suggest 5% OTM Call strike based on live stock price
+        const liveOtmStrike = (Math.round((quote.price * 1.05) * 2) / 2).toFixed(2);
+        setCcStrike(liveOtmStrike);
+      }
+    } catch (e) {
+      // Fallback
+    } finally {
+      setFetchingCcQuote(false);
+    }
+  };
 
   useEffect(() => {
     loadPositions();
@@ -324,6 +353,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
 
     return {
       shares,
+      putTotalPrem,
       totalIncome,
       initialCostBasisPerShare,
       currentNetCostBasisPerShare,
@@ -333,6 +363,174 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
       totalRealizedPnl,
       ccCount: (pos.coveredCallsSold || []).length,
     };
+  };
+
+  const activePositions = positions.filter((p) => p.phase !== 'completed');
+  const completedPositions = positions.filter((p) => p.phase === 'completed');
+
+  const renderPositionCard = (pos: WheelPosition) => {
+    const summary = calculateWheelSummary(pos);
+    return (
+      <View key={pos.id} style={styles.posCard}>
+        <View style={styles.posHeader}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.posTicker}>{pos.ticker}</Text>
+            <View style={styles.sharesTag}>
+              <Text style={styles.sharesTagText}>{pos.shares} Shares</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View
+              style={[
+                styles.phaseBadge,
+                pos.phase === 'csp' && styles.phaseCsp,
+                pos.phase === 'assigned_shares' && styles.phaseAssigned,
+                pos.phase === 'covered_call' && styles.phaseCc,
+                pos.phase === 'completed' && styles.phaseCompleted,
+              ]}
+            >
+              <Text style={styles.phaseBadgeText}>
+                {pos.phase === 'csp' && 'Phase 1: Cash-Secured Put'}
+                {pos.phase === 'assigned_shares' && 'Phase 2: Assigned Shares'}
+                {pos.phase === 'covered_call' && `Phase 3: Selling CCs (${summary.ccCount})`}
+                {pos.phase === 'completed' && `🏆 Wheel Complete (+${summary.overallRocPercent.toFixed(1)}% ROC)`}
+              </Text>
+            </View>
+
+            <TouchableOpacity onPress={() => handleDeletePosition(pos.id)} style={{ marginLeft: 8 }}>
+              <Trash2 size={16} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 4-Column Key Ledger Stats */}
+        <View style={styles.ledgerGrid}>
+          <View style={styles.ledgerCell}>
+            <Text style={styles.cellLabel}>Strike / Collateral</Text>
+            <Text style={styles.cellValuePrimary}>${pos.initialStrike.toFixed(2)}</Text>
+            <Text style={styles.cellSub}>${summary.totalCapitalLocked.toLocaleString()}</Text>
+          </View>
+
+          <View style={styles.ledgerCell}>
+            <Text style={styles.cellLabel}>Put Premium</Text>
+            <Text style={styles.cellValueSuccess}>+${pos.initialPutPremium.toFixed(2)}</Text>
+            <Text style={styles.cellSub}>+${summary.putTotalPrem.toFixed(0)} Total</Text>
+          </View>
+
+          <View style={styles.ledgerCell}>
+            <Text style={styles.cellLabel}>Net Cost Basis</Text>
+            <Text style={styles.cellValueSuccess}>${summary.currentNetCostBasisPerShare.toFixed(2)}</Text>
+            <Text style={styles.cellSub}>Initial: ${summary.initialCostBasisPerShare.toFixed(2)}</Text>
+          </View>
+
+          <View style={styles.ledgerCell}>
+            <Text style={styles.cellLabel}>Total Income / ROC</Text>
+            <Text style={styles.cellValueSuccess}>+${summary.totalIncome.toFixed(0)}</Text>
+            <Text style={styles.cellSub}>{summary.overallRocPercent.toFixed(1)}% ROC</Text>
+          </View>
+        </View>
+
+        {/* Completed Lifecycle Summary Banner */}
+        {pos.phase === 'completed' && (
+          <View style={styles.completedCelebrationBanner}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <CheckCircle2 size={16} color="#10B981" style={{ marginRight: 6 }} />
+              <Text style={styles.completedCelebrationTitle}>Wheel Strategy Completed Successfully!</Text>
+            </View>
+            <Text style={styles.completedCelebrationText}>
+              Total Realized Gain: +${summary.totalRealizedPnl.toFixed(2)} ({summary.overallRocPercent.toFixed(1)}% ROC) across {summary.ccCount} Covered Call cycle{summary.ccCount !== 1 ? 's' : ''}.
+            </Text>
+          </View>
+        )}
+
+        {/* Covered Call Log Sub-List with Status & Actions */}
+        {pos.coveredCallsSold.length > 0 && (
+          <View style={styles.ccSubBox}>
+            <Text style={styles.ccSubTitle}>Covered Calls Logged ({pos.coveredCallsSold.length}):</Text>
+            {pos.coveredCallsSold.map((cc, i) => (
+              <View key={cc.id || i} style={styles.ccItemCard}>
+                <View style={styles.ccRow}>
+                  <Text style={styles.ccText}>• Sold ${cc.strike} Call ({cc.dte} DTE)</Text>
+                  <Text style={styles.ccPrem}>+${cc.premium.toFixed(2)}/sh (+${(cc.premium * pos.shares).toFixed(0)})</Text>
+                </View>
+
+                <View style={styles.ccStatusRow}>
+                  {cc.status === 'active' ? (
+                    <View style={styles.ccActionBtnRow}>
+                      <TouchableOpacity
+                        style={styles.ccExpireBtn}
+                        onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'expired')}
+                      >
+                        <Text style={styles.ccExpireText}>Expire (100% Win)</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.ccAssignBtn}
+                        onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'assigned')}
+                      >
+                        <Text style={styles.ccAssignText}>Assigned (Called Away)</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : cc.status === 'expired' ? (
+                    <View style={styles.statusPillExpired}>
+                      <Text style={styles.statusPillTextExpired}>Expired Worthless</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.statusPillAssigned}>
+                      <Text style={styles.statusPillTextAssigned}>Shares Called Away</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Transition Phase Action Bar */}
+        <View style={styles.cardActions}>
+          {pos.phase === 'csp' && (
+            <TouchableOpacity
+              style={styles.transitionBtn}
+              onPress={() => handleTransitionToAssigned(pos)}
+            >
+              <CheckCircle2 size={15} color="#F59E0B" style={{ marginRight: 6 }} />
+              <Text style={styles.transitionBtnText}>Mark Assigned → Enter Phase 2</Text>
+            </TouchableOpacity>
+          )}
+
+          {(pos.phase === 'assigned_shares' || pos.phase === 'covered_call') && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <TouchableOpacity
+                style={[styles.addCcBtn, { flex: 0.65 }]}
+                onPress={() => handleOpenAddCoveredCall(pos)}
+                activeOpacity={0.8}
+              >
+                <Plus size={15} color="#3B82F6" style={{ marginRight: 6 }} />
+                <Text style={styles.addCcBtnText}>+ Sell Covered Call</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.manualCompleteBtn, { flex: 0.32 }]}
+                onPress={() => handleCompleteWheelManually(pos.id)}
+              >
+                <Text style={styles.manualCompleteBtnText}>Complete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {pos.phase === 'completed' && (
+            <TouchableOpacity
+              style={styles.restartBtn}
+              onPress={() => handleRestartWheel(pos.id)}
+            >
+              <RotateCcw size={15} color="#10B981" style={{ marginRight: 6 }} />
+              <Text style={styles.restartBtnText}>Restart Wheel Cycle</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -376,7 +574,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
 
         {/* TOP ACTIONS ROW */}
         <View style={styles.actionsRow}>
-          <Text style={styles.sectionHeader}>Active Wheel Ledgers ({positions.length})</Text>
+          <Text style={styles.sectionHeader}>Active Wheel Ledgers ({activePositions.length})</Text>
           <TouchableOpacity
             style={styles.addBtn}
             onPress={() => {
@@ -421,163 +619,9 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
           </TouchableOpacity>
         )}
 
-        {/* WHEEL POSITIONS LIST */}
-        {positions.length > 0 ? (
-          positions.map((pos) => {
-            const summary = calculateWheelSummary(pos);
-            return (
-              <View key={pos.id} style={styles.posCard}>
-                <View style={styles.posHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.posTicker}>{pos.ticker}</Text>
-                    <View style={styles.sharesTag}>
-                      <Text style={styles.sharesTagText}>{pos.shares} Shares</Text>
-                    </View>
-                  </View>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View
-                      style={[
-                        styles.phaseBadge,
-                        pos.phase === 'csp' && styles.phaseCsp,
-                        pos.phase === 'assigned_shares' && styles.phaseAssigned,
-                        pos.phase === 'covered_call' && styles.phaseCc,
-                        pos.phase === 'completed' && styles.phaseCompleted,
-                      ]}
-                    >
-                      <Text style={styles.phaseBadgeText}>
-                        {pos.phase === 'csp' && 'Phase 1: Cash-Secured Put'}
-                        {pos.phase === 'assigned_shares' && 'Phase 2: Assigned Shares'}
-                        {pos.phase === 'covered_call' && `Phase 3: Selling CCs (${summary.ccCount})`}
-                        {pos.phase === 'completed' && `🏆 Wheel Complete (+${summary.overallRocPercent.toFixed(1)}% ROC)`}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity onPress={() => handleDeletePosition(pos.id)} style={{ marginLeft: 8 }}>
-                      <Trash2 size={16} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* 4-Column Key Ledger Stats */}
-                <View style={styles.ledgerGrid}>
-                  <View style={styles.ledgerCell}>
-                    <Text style={styles.cellLabel}>Strike / Collateral</Text>
-                    <Text style={styles.cellValuePrimary}>${pos.initialStrike.toFixed(2)}</Text>
-                    <Text style={styles.cellSub}>${summary.totalCapitalLocked.toLocaleString()}</Text>
-                  </View>
-
-                  <View style={styles.ledgerCell}>
-                    <Text style={styles.cellLabel}>Put Premium</Text>
-                    <Text style={styles.cellValueSuccess}>+${pos.initialPutPremium.toFixed(2)}/sh</Text>
-                    <Text style={styles.cellSub}>+${(pos.initialPutPremium * pos.shares).toFixed(0)}</Text>
-                  </View>
-
-                  <View style={styles.ledgerCell}>
-                    <Text style={styles.cellLabel}>Total Income</Text>
-                    <Text style={styles.cellValueSuccess}>+${summary.totalIncome.toFixed(0)}</Text>
-                    <Text style={styles.cellSub}>ROC: {summary.overallRocPercent.toFixed(1)}%</Text>
-                  </View>
-
-                  <View style={styles.ledgerCell}>
-                    <Text style={styles.cellLabel}>Net Cost Basis</Text>
-                    <Text style={styles.cellValueNet}>${summary.currentNetCostBasisPerShare.toFixed(2)}</Text>
-                    <Text style={styles.cellSub}>Per share</Text>
-                  </View>
-                </View>
-
-                {/* Covered Call Log Sub-List with Status & Actions */}
-                {pos.coveredCallsSold.length > 0 && (
-                  <View style={styles.ccSubBox}>
-                    <Text style={styles.ccSubTitle}>Covered Calls Logged:</Text>
-                    {pos.coveredCallsSold.map((cc, i) => (
-                      <View key={cc.id || i} style={styles.ccItemCard}>
-                        <View style={styles.ccRow}>
-                          <Text style={styles.ccText}>• Sold ${cc.strike} Call ({cc.dte} DTE)</Text>
-                          <Text style={styles.ccPrem}>+${cc.premium.toFixed(2)}/sh (+${(cc.premium * pos.shares).toFixed(0)})</Text>
-                        </View>
-
-                        <View style={styles.ccStatusRow}>
-                          {cc.status === 'active' ? (
-                            <View style={styles.ccActionBtnRow}>
-                              <TouchableOpacity
-                                style={styles.ccExpireBtn}
-                                onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'expired')}
-                              >
-                                <Text style={styles.ccExpireText}>Expire (100% Win)</Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={styles.ccAssignBtn}
-                                onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'assigned')}
-                              >
-                                <Text style={styles.ccAssignText}>Assigned (Called Away)</Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : cc.status === 'expired' ? (
-                            <View style={styles.statusPillExpired}>
-                              <Text style={styles.statusPillTextExpired}>Expired Worthless</Text>
-                            </View>
-                          ) : (
-                            <View style={styles.statusPillAssigned}>
-                              <Text style={styles.statusPillTextAssigned}>Shares Called Away</Text>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                {/* Transition Phase Action Bar */}
-                <View style={styles.cardActions}>
-                  {pos.phase === 'csp' && (
-                    <TouchableOpacity
-                      style={styles.transitionBtn}
-                      onPress={() => handleTransitionToAssigned(pos)}
-                    >
-                      <CheckCircle2 size={15} color="#F59E0B" style={{ marginRight: 6 }} />
-                      <Text style={styles.transitionBtnText}>Mark Assigned $\rightarrow$ Enter Phase 2</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {(pos.phase === 'assigned_shares' || pos.phase === 'covered_call') && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <TouchableOpacity
-                        style={[styles.addCcBtn, { flex: 0.65 }]}
-                        onPress={() => {
-                          setSelectedPosition(pos);
-                          setCcStrike((pos.initialStrike * 1.05).toFixed(2));
-                          setCcPremium('2.50');
-                          setCcModalVisible(true);
-                        }}
-                      >
-                        <Plus size={15} color="#3B82F6" style={{ marginRight: 6 }} />
-                        <Text style={styles.addCcBtnText}>+ Sell Covered Call</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.manualCompleteBtn, { flex: 0.32 }]}
-                        onPress={() => handleCompleteWheelManually(pos.id)}
-                      >
-                        <Text style={styles.manualCompleteBtnText}>Complete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-
-                  {pos.phase === 'completed' && (
-                    <TouchableOpacity
-                      style={styles.restartBtn}
-                      onPress={() => handleRestartWheel(pos.id)}
-                    >
-                      <RotateCcw size={15} color="#10B981" style={{ marginRight: 6 }} />
-                      <Text style={styles.restartBtnText}>Restart Wheel Cycle</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })
+        {/* ACTIVE WHEEL POSITIONS LIST */}
+        {activePositions.length > 0 ? (
+          activePositions.map((pos) => renderPositionCard(pos))
         ) : (
           <View style={styles.emptyCard}>
             <RotateCcw size={36} color="#64748B" style={{ marginBottom: 10 }} />
@@ -585,6 +629,40 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
             <Text style={styles.emptySub}>
               Start a Cash-Secured Put, track assignments, and automatically record Covered Calls to continuously lower your stock cost basis.
             </Text>
+          </View>
+        )}
+
+        {/* COMPLETED WHEEL ARCHIVE DRAWER */}
+        {completedPositions.length > 0 && (
+          <View style={styles.archiveContainer}>
+            <TouchableOpacity
+              style={styles.archiveHeaderBtn}
+              onPress={() => setShowCompletedArchive(!showCompletedArchive)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Trophy size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+                <Text style={styles.archiveHeaderText}>
+                  Completed Wheels Archive ({completedPositions.length})
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.archiveToggleText}>
+                  {showCompletedArchive ? 'Hide' : 'View'}
+                </Text>
+                {showCompletedArchive ? (
+                  <ChevronUp size={14} color="#60A5FA" style={{ marginLeft: 4 }} />
+                ) : (
+                  <ChevronDown size={14} color="#60A5FA" style={{ marginLeft: 4 }} />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {showCompletedArchive && (
+              <View style={{ marginTop: 10 }}>
+                {completedPositions.map((pos) => renderPositionCard(pos))}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -1128,5 +1206,48 @@ const styles = StyleSheet.create({
   bannerSub: {
     color: '#DDD6FE',
     fontSize: 11,
+  },
+  archiveContainer: {
+    marginTop: 18,
+    marginBottom: 20,
+  },
+  archiveHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#161E2E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  archiveHeaderText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  archiveToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#60A5FA',
+  },
+  completedCelebrationBanner: {
+    backgroundColor: '#064E3B25',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#05966950',
+  },
+  completedCelebrationTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#34D399',
+  },
+  completedCelebrationText: {
+    fontSize: 11,
+    color: '#A7F3D0',
+    lineHeight: 16,
   },
 });

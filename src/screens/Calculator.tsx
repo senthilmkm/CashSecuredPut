@@ -19,6 +19,8 @@ import {
   RefreshCw,
   Sparkles,
   Target,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import { calculateCSPMetrics, CSPTradeMetrics } from '../services/cspMath';
 import { getMarketQuote, getPutOptionChain, CSPOptionContract } from '../services/publicApi';
@@ -48,6 +50,8 @@ export default function Calculator({
   const [commissions, setCommissions] = useState('1.00');
 
   const [fetchingQuote, setFetchingQuote] = useState(false);
+  const [isSyncingDte, setIsSyncingDte] = useState(false);
+  const [showAdvancedChart, setShowAdvancedChart] = useState(false);
   const [optionChain, setOptionChain] = useState<CSPOptionContract[]>([]);
   const [selectedContract, setSelectedContract] = useState<CSPOptionContract | null>(null);
   const [selectedExpFilter, setSelectedExpFilter] = useState<string>('all');
@@ -55,11 +59,13 @@ export default function Calculator({
 
   const quoteRequestId = useRef(0);
   const isMountedRef = useRef(true);
+  const dteTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (dteTimeoutRef.current) clearTimeout(dteTimeoutRef.current);
     };
   }, []);
 
@@ -109,8 +115,8 @@ export default function Calculator({
     handleFetchQuote();
   }, []);
 
-  const handleFetchQuote = async () => {
-    const cleanSymbol = ticker.trim().toUpperCase();
+  const handleFetchQuote = async (symbolOverride?: string) => {
+    const cleanSymbol = (typeof symbolOverride === 'string' ? symbolOverride : ticker).trim().toUpperCase();
     if (!cleanSymbol) {
       Alert.alert('Invalid Ticker', 'Please enter a valid stock symbol (e.g. AAPL, TSLA, NVDA).');
       return;
@@ -173,25 +179,80 @@ export default function Calculator({
     }
   };
 
-  const handleDteChange = (text: string) => {
-    setDte(text);
-    const parsed = parseInt(text, 10);
-    if (!isNaN(parsed) && parsed > 0 && uniqueExpirations.length > 0) {
-      let closestExp = uniqueExpirations[0];
-      let minDiff = Infinity;
-      for (const exp of uniqueExpirations) {
-        const expTime = new Date(`${exp}T16:00:00Z`).getTime();
-        const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
-        const diff = Math.abs(days - parsed);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestExp = exp;
+  const fetchChainForTargetDte = async (targetDteNum: number) => {
+    const cleanSymbol = ticker.trim().toUpperCase();
+    if (!cleanSymbol) {
+      setIsSyncingDte(false);
+      return;
+    }
+
+    const reqId = ++quoteRequestId.current;
+    try {
+      const stockNum = parseFloat(stockPrice) || 0;
+      const targetQueryDte = Math.max(1, targetDteNum);
+      const chain = await getPutOptionChain(cleanSymbol, stockNum, targetQueryDte);
+      if (reqId !== quoteRequestId.current || !isMountedRef.current) return;
+
+      setOptionChain(chain);
+      if (chain.length > 0) {
+        const uniqueExps = Array.from(new Set(chain.map((c) => c.expiration))).sort();
+        let bestExp = uniqueExps[0];
+        let minExpDiff = Infinity;
+        for (const exp of uniqueExps) {
+          const expTime = new Date(`${exp}T16:00:00Z`).getTime();
+          const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
+          const diff = Math.abs(days - targetDteNum);
+          if (diff < minExpDiff) {
+            minExpDiff = diff;
+            bestExp = exp;
+          }
+        }
+        setSelectedExpFilter(bestExp);
+
+        const expContracts = chain.filter((c) => c.expiration === bestExp);
+        const candidateList = expContracts.length > 0 ? expContracts : chain;
+        const targetStrike = stockNum > 0 ? Math.round(stockNum * 0.95) : 0;
+        const nearest = candidateList.reduce((prev, curr) =>
+          Math.abs(curr.strike - targetStrike) < Math.abs(prev.strike - targetStrike) ? curr : prev
+        );
+        if (nearest) {
+          setSelectedContract(nearest);
+          setStrikePrice(nearest.strike.toFixed(2));
+          setPremium(nearest.premium.toFixed(2));
         }
       }
-      if (closestExp) {
-        setSelectedExpFilter(closestExp);
-      }
+    } catch (e) {
+      // Fallback
+    } finally {
+      // Display spinner for at least 1.5s so user clearly gets positive visual feedback
+      setTimeout(() => {
+        if (reqId === quoteRequestId.current && isMountedRef.current) {
+          setIsSyncingDte(false);
+        }
+      }, 1500);
     }
+  };
+
+  const handleDteChange = (text: string) => {
+    setDte(text);
+    if (dteTimeoutRef.current) {
+      clearTimeout(dteTimeoutRef.current);
+    }
+
+    const parsed = parseInt(text, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
+      setIsSyncingDte(true);
+      dteTimeoutRef.current = setTimeout(() => {
+        fetchChainForTargetDte(parsed);
+      }, 500);
+    } else {
+      setIsSyncingDte(false);
+    }
+  };
+
+  const handleSelectQuickTicker = (sym: string) => {
+    setTicker(sym);
+    handleFetchQuote(sym);
   };
 
   const selectContractFromChain = (contract: CSPOptionContract) => {
@@ -249,7 +310,12 @@ export default function Calculator({
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         
         {/* 1. HERO SCORECARD & HEALTH GAUGE CARD */}
         {metrics && (
@@ -293,8 +359,24 @@ export default function Calculator({
               </View>
             </View>
 
+            {/* Toggle Button for Advanced Greeks & Payoff Chart */}
+            <TouchableOpacity
+              style={styles.toggleChartBtn}
+              onPress={() => setShowAdvancedChart(!showAdvancedChart)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.toggleChartText}>
+                {showAdvancedChart ? 'Hide Greeks & Payoff Chart' : 'Show Greeks & Payoff Chart'}
+              </Text>
+              {showAdvancedChart ? (
+                <ChevronUp size={14} color="#60A5FA" style={{ marginLeft: 4 }} />
+              ) : (
+                <ChevronDown size={14} color="#60A5FA" style={{ marginLeft: 4 }} />
+              )}
+            </TouchableOpacity>
+
             {/* Delta & Probability of Profit Banner */}
-            {metrics.greeks && (
+            {showAdvancedChart && metrics.greeks && (
               <View style={styles.greeksBar}>
                 <View style={styles.greekItem}>
                   <Text style={styles.greekLabel}>Delta</Text>
@@ -327,7 +409,7 @@ export default function Calculator({
         )}
 
         {/* 1.5 INTERACTIVE EXPIRATION PAYOFF CHART */}
-        {metrics && (
+        {showAdvancedChart && metrics && (
           <PayoffChart
             stockPrice={parseFloat(stockPrice) || 0}
             strikePrice={parseFloat(strikePrice) || 0}
@@ -350,15 +432,33 @@ export default function Calculator({
                 placeholder="SYMBOL"
                 placeholderTextColor="#64748B"
                 autoCapitalize="characters"
+                returnKeyType="search"
+                onSubmitEditing={() => handleFetchQuote()}
               />
             </View>
-            <TouchableOpacity style={styles.fetchBtn} onPress={handleFetchQuote} disabled={fetchingQuote}>
+            <TouchableOpacity style={styles.fetchBtn} onPress={() => handleFetchQuote()} disabled={fetchingQuote}>
               {fetchingQuote ? (
                 <ActivityIndicator color="#FFF" size="small" />
               ) : (
                 <Text style={styles.fetchBtnText}>Fetch Quote</Text>
               )}
             </TouchableOpacity>
+          </View>
+
+          {/* Quick-Pick Ticker Chips */}
+          <View style={styles.quickChipsRow}>
+            {['NVDA', 'AAPL', 'TSLA', 'SPY', 'QQQ'].map((sym) => (
+              <TouchableOpacity
+                key={sym}
+                style={[styles.quickChip, ticker === sym && styles.quickChipActive]}
+                onPress={() => handleSelectQuickTicker(sym)}
+                activeOpacity={0.75}
+              >
+                <Text style={[styles.quickChipText, ticker === sym && styles.quickChipTextActive]}>
+                  {sym}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Form Matrix */}
@@ -395,6 +495,27 @@ export default function Calculator({
               Total Net Premium Collected: <Text style={{ color: '#10B981', fontWeight: '800' }}>+${totalCashCollected.toFixed(2)}</Text> ({parsedContracts * 100} shares locked)
             </Text>
           </View>
+
+          {/* DTE Syncing Spinner or 0DTE Indicator */}
+          {isSyncingDte && (
+            <View style={styles.syncingBanner}>
+              <ActivityIndicator size="small" color="#60A5FA" style={{ marginRight: 8 }} />
+              <Text style={styles.syncingBannerText}>
+                {dte === '0'
+                  ? 'Recalculating for 0 DTE (Same-Day Expiration)...'
+                  : `Recalculating & Fetching ${dte || '30'}-Day Put Chain...`}
+              </Text>
+            </View>
+          )}
+
+          {dte === '0' && !isSyncingDte && (
+            <View style={styles.zeroDteBanner}>
+              <Sparkles size={13} color="#F59E0B" style={{ marginRight: 6 }} />
+              <Text style={styles.zeroDteBannerText}>
+                ⚡ 0 DTE: Evaluated as same-day expiration trade.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* 3. LIVE OPTIONS CHAIN CARD */}
@@ -915,5 +1036,84 @@ const styles = StyleSheet.create({
     width: 1,
     height: 18,
     backgroundColor: '#1E293B',
+  },
+  toggleChartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  toggleChartText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#60A5FA',
+  },
+  quickChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  quickChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginRight: 8,
+  },
+  quickChipActive: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#3B82F6',
+  },
+  quickChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+  },
+  quickChipTextActive: {
+    color: '#FFFFFF',
+  },
+  syncingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1E3A8A',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  syncingBannerText: {
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  zeroDteBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#78350F',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  zeroDteBannerText: {
+    color: '#FCD34D',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
 });

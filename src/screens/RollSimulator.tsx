@@ -187,6 +187,57 @@ export default function RollSimulator({
         </View>
       </View>
 
+      {/* 1-Tap Roll Presets Bar to reduce user friction */}
+      <View style={styles.presetsCard}>
+        <Text style={styles.presetsTitle}>Quick Roll Presets</Text>
+        <View style={styles.presetsRow}>
+          <TouchableOpacity
+            style={styles.presetBtn}
+            onPress={() => {
+              const baseDte = parseInt(newDte, 10) || 30;
+              setNewDte((baseDte + 7).toString());
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnText}>+7 Days</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.presetBtn}
+            onPress={() => {
+              const baseDte = parseInt(newDte, 10) || 30;
+              setNewDte((baseDte + 14).toString());
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnText}>+14 Days</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.presetBtn}
+            onPress={() => {
+              const baseDte = parseInt(newDte, 10) || 30;
+              setNewDte((baseDte + 30).toString());
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnText}>+30 Days</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.presetBtn, styles.presetBtnStrike]}
+            onPress={() => {
+              const curr = parseFloat(currentStrike) || 100;
+              const rolledDown = Math.max(1, curr * 0.95);
+              setNewStrike(rolledDown.toFixed(2));
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnTextStrike}>-5% Strike</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Simulation Outcome Cards */}
       {rollResult && (
         <View style={styles.outcomeCard}>
@@ -399,5 +450,46 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '800',
     fontSize: 15,
+  },
+  presetsCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  presetsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginBottom: 8,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  presetBtn: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    marginHorizontal: 3,
+    borderWidth: 1,
+    borderColor: '#1E3A8A',
+  },
+  presetBtnText: {
+    color: '#3B82F6',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  presetBtnStrike: {
+    borderColor: '#065F46',
+  },
+  presetBtnTextStrike: {
+    color: '#10B981',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
 });
