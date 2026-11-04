@@ -44,6 +44,7 @@ export default function RollSimulator({
   onDismissActiveTrade,
   onRollSuccess,
 }: RollSimulatorProps) {
+  const [ticker, setTicker] = useState(initialData?.ticker || 'AAPL');
   const [currentStrike, setCurrentStrike] = useState(initialData?.strikePrice ? initialData.strikePrice.toString() : '140.00');
   const [currentContracts, setCurrentContracts] = useState(initialData?.contracts ? initialData.contracts.toString() : '1');
   const [closeCost, setCloseCost] = useState('4.50');
@@ -140,7 +141,7 @@ export default function RollSimulator({
     setIsSyncingRoll(true);
     setSyncingMessage(message);
     try {
-      const tickerSym = initialData?.ticker;
+      const tickerSym = initialData?.ticker || ticker || 'AAPL';
       const stockNum = initialData?.stockPrice || parseFloat(currentStrike) || 100;
       
       let chain = optionChain;
@@ -234,27 +235,36 @@ export default function RollSimulator({
   };
 
 
-  // Sync state when initialData changes (e.g. user selects a different trade in Portfolio)
+  // Sync state when initialData changes or on initial screen mount
   useEffect(() => {
-    if (initialData) {
-      const initStrike = initialData.strikePrice ? parseFloat(initialData.strikePrice) : 140;
-      const initContracts = initialData.contracts ? parseInt(initialData.contracts, 10) : 1;
-      const initPrem = initialData.premium ? parseFloat(initialData.premium) : 3.8;
-      const rolledStrike = Math.max(1, initStrike - 5);
-      const initDte = initialData.dte ? parseInt(initialData.dte, 10) : 30;
+    const activeTicker = initialData?.ticker || ticker || 'AAPL';
+    const initStrike = initialData?.strikePrice ? parseFloat(initialData.strikePrice) : 140;
+    const initContracts = initialData?.contracts ? parseInt(initialData.contracts, 10) : 1;
+    const initPrem = initialData?.premium ? parseFloat(initialData.premium) : 3.8;
+    const rolledStrike = Math.max(1, initStrike - 5);
+    const initDte = initialData?.dte ? parseInt(initialData.dte, 10) : 30;
 
-      setCurrentStrike(initStrike.toFixed(2));
-      setNewStrike(rolledStrike.toFixed(2));
-      setCurrentContracts(initContracts.toString());
-      setCloseCost((initPrem * 1.2).toFixed(2));
-      setNewDte(initDte.toString());
-
-      if (initialData.ticker) {
-        const stockNum = initialData.stockPrice || initStrike;
-        loadOptionChainData(initialData.ticker, stockNum, initDte);
-      }
+    if (initialData?.ticker) {
+      setTicker(initialData.ticker);
     }
+    setCurrentStrike(initStrike.toFixed(2));
+    setNewStrike(rolledStrike.toFixed(2));
+    setCurrentContracts(initContracts.toString());
+    setCloseCost((initPrem * 1.2).toFixed(2));
+    setNewDte(initDte.toString());
+
+    const stockNum = initialData?.stockPrice || initStrike;
+    loadOptionChainData(activeTicker, stockNum, initDte);
   }, [initialData]);
+
+  const handleSelectQuickTicker = (sym: string) => {
+    setTicker(sym);
+    const targetStrike = sym === 'NVDA' ? 120 : sym === 'TSLA' ? 220 : sym === 'MSFT' ? 410 : sym === 'SPY' ? 570 : 140;
+    setCurrentStrike(targetStrike.toFixed(2));
+    setNewStrike((targetStrike - 5).toFixed(2));
+    triggerSyncFeedback(`Fetching live ${sym} options chain...`);
+    loadOptionChainData(sym, targetStrike, parseInt(newDte, 10) || 30);
+  };
 
   // Filter strikes for the currently selected expiration date
   const availableStrikes = useMemo(() => {
@@ -379,6 +389,27 @@ export default function RollSimulator({
         </View>
       )}
 
+      {/* Standalone Stock Selector Bar */}
+      {!initialData?.ticker && (
+        <View style={styles.tickerSelectorCard}>
+          <Text style={styles.tickerSelectorLabel}>Select Stock to Roll:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tickerPillsRow}>
+            {['AAPL', 'NVDA', 'TSLA', 'MSFT', 'SPY'].map((sym) => (
+              <TouchableOpacity
+                key={sym}
+                style={[styles.tickerPill, ticker === sym && styles.tickerPillActive]}
+                onPress={() => handleSelectQuickTicker(sym)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tickerPillText, ticker === sym && styles.tickerPillTextActive]}>
+                  {sym}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Paywall Lock Ribbon for Free Users */}
       {!isPremium && (
         <TouchableOpacity style={styles.proRibbon} onPress={onOpenPaywall} activeOpacity={0.85}>
@@ -455,15 +486,18 @@ export default function RollSimulator({
           
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <Text style={styles.inputLabel}>New Strike ($)</Text>
-            {availableStrikes.length > 0 && (
-              <TouchableOpacity
-                style={styles.dropdownToggleBtn}
-                onPress={() => setShowStrikeDropdown(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.dropdownToggleText}>Select ▾</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.dropdownToggleBtn}
+              onPress={() => {
+                if (optionChain.length === 0) {
+                  loadOptionChainData(ticker, parseFloat(currentStrike) || 140, parseInt(newDte, 10) || 30);
+                }
+                setShowStrikeDropdown(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dropdownToggleText}>Select ▾</Text>
+            </TouchableOpacity>
           </View>
           <TextInput
             style={styles.numInput}
@@ -479,15 +513,18 @@ export default function RollSimulator({
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <Text style={styles.inputLabel}>New DTE (Days)</Text>
-            {uniqueExpirations.length > 0 && (
-              <TouchableOpacity
-                style={styles.dropdownToggleBtn}
-                onPress={() => setShowExpDropdown(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.dropdownToggleText}>Date ▾</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.dropdownToggleBtn}
+              onPress={() => {
+                if (uniqueExpirations.length === 0) {
+                  loadOptionChainData(ticker, parseFloat(currentStrike) || 140, parseInt(newDte, 10) || 30);
+                }
+                setShowExpDropdown(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.dropdownToggleText}>Date ▾</Text>
+            </TouchableOpacity>
           </View>
           <TextInput
             style={styles.numInput}
@@ -736,41 +773,50 @@ export default function RollSimulator({
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator>
-              {availableStrikes.map((c) => {
-                const isSelected = Math.abs(c.strike - (parseFloat(newStrike) || 0)) < 0.05;
-                const isOtm = c.strike < (initialData?.stockPrice || parseFloat(currentStrike) || 0);
-                return (
-                  <TouchableOpacity
-                    key={`${c.expiration}-${c.strike}`}
-                    style={[styles.modalItemRow, isSelected && styles.modalItemRowSelected]}
-                    onPress={() => handleSelectStrike(c)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={[styles.modalStrikeText, isSelected && styles.modalStrikeTextSelected]}>
-                          ${c.strike.toFixed(2)} Put
-                        </Text>
-                        <View style={[styles.moneynessBadge, isOtm ? styles.otmBadge : styles.itmBadge]}>
-                          <Text style={[styles.moneynessText, isOtm ? styles.otmText : styles.itmText]}>
-                            {isOtm ? 'OTM' : 'ITM'}
+            {availableStrikes.length === 0 ? (
+              <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="small" color="#10B981" style={{ marginBottom: 12 }} />
+                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>
+                  Loading real-time strikes for {ticker}...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator>
+                {availableStrikes.map((c) => {
+                  const isSelected = Math.abs(c.strike - (parseFloat(newStrike) || 0)) < 0.05;
+                  const isOtm = c.strike < (initialData?.stockPrice || parseFloat(currentStrike) || 0);
+                  return (
+                    <TouchableOpacity
+                      key={`${c.expiration}-${c.strike}`}
+                      style={[styles.modalItemRow, isSelected && styles.modalItemRowSelected]}
+                      onPress={() => handleSelectStrike(c)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Text style={[styles.modalStrikeText, isSelected && styles.modalStrikeTextSelected]}>
+                            ${c.strike.toFixed(2)} Put
                           </Text>
+                          <View style={[styles.moneynessBadge, isOtm ? styles.otmBadge : styles.itmBadge]}>
+                            <Text style={[styles.moneynessText, isOtm ? styles.otmText : styles.itmText]}>
+                              {isOtm ? 'OTM' : 'ITM'}
+                            </Text>
+                          </View>
                         </View>
+                        <Text style={styles.modalSubText}>
+                          Breakeven: ${(c.strike - c.premium).toFixed(2)} • Return: {((c.premium / (c.strike || 1)) * 100).toFixed(1)}% • Bid/Ask: ${c.bid?.toFixed(2) || '0.00'}/${c.ask?.toFixed(2) || '0.00'}
+                        </Text>
                       </View>
-                      <Text style={styles.modalSubText}>
-                        Breakeven: ${(c.strike - c.premium).toFixed(2)} • Return: {((c.premium / (c.strike || 1)) * 100).toFixed(1)}% • Bid/Ask: ${c.bid?.toFixed(2) || '0.00'}/${c.ask?.toFixed(2) || '0.00'}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
-                      <Text style={styles.modalPremText}>+${c.premium.toFixed(2)}</Text>
-                      <Text style={styles.modalPremSub}>/share</Text>
-                    </View>
-                    {isSelected && <Check size={18} color="#10B981" />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+                      <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
+                        <Text style={styles.modalPremText}>+${c.premium.toFixed(2)}</Text>
+                        <Text style={styles.modalPremSub}>/share</Text>
+                      </View>
+                      {isSelected && <Check size={18} color="#10B981" />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -798,30 +844,39 @@ export default function RollSimulator({
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator>
-              {uniqueExpirations.map((exp) => {
-                const expTime = new Date(`${exp}T16:00:00Z`).getTime();
-                const dteCalc = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
-                const isSelected = exp === selectedExpiration;
-                return (
-                  <TouchableOpacity
-                    key={exp}
-                    style={[styles.modalItemRow, isSelected && styles.modalItemRowSelected]}
-                    onPress={() => handleSelectExpiration(exp)}
-                    activeOpacity={0.7}
-                  >
-                    <Calendar size={18} color={isSelected ? '#38BDF8' : '#64748B'} style={{ marginRight: 10 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalStrikeText, isSelected && styles.modalStrikeTextSelected]}>
-                        {exp}
-                      </Text>
-                      <Text style={styles.modalSubText}>{dteCalc} Days to Expiration</Text>
-                    </View>
-                    {isSelected && <Check size={18} color="#10B981" />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {uniqueExpirations.length === 0 ? (
+              <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="small" color="#10B981" style={{ marginBottom: 12 }} />
+                <Text style={{ color: '#94A3B8', fontSize: 13, fontWeight: '600' }}>
+                  Loading expiration dates for {ticker}...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator>
+                {uniqueExpirations.map((exp) => {
+                  const expTime = new Date(`${exp}T16:00:00Z`).getTime();
+                  const dteCalc = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
+                  const isSelected = exp === selectedExpiration;
+                  return (
+                    <TouchableOpacity
+                      key={exp}
+                      style={[styles.modalItemRow, isSelected && styles.modalItemRowSelected]}
+                      onPress={() => handleSelectExpiration(exp)}
+                      activeOpacity={0.7}
+                    >
+                      <Calendar size={18} color={isSelected ? '#38BDF8' : '#64748B'} style={{ marginRight: 10 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.modalStrikeText, isSelected && styles.modalStrikeTextSelected]}>
+                          {exp}
+                        </Text>
+                        <Text style={styles.modalSubText}>{dteCalc} Days to Expiration</Text>
+                      </View>
+                      {isSelected && <Check size={18} color="#10B981" />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -1265,5 +1320,44 @@ const styles = StyleSheet.create({
   },
   itmText: {
     color: '#EF4444',
+  },
+  tickerSelectorCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  tickerSelectorLabel: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginBottom: 8,
+  },
+  tickerPillsRow: {
+    flexDirection: 'row',
+  },
+  tickerPill: {
+    backgroundColor: '#0B0F19',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  tickerPillActive: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#3B82F6',
+  },
+  tickerPillText: {
+    color: '#94A3B8',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  tickerPillTextActive: {
+    color: '#60A5FA',
+    fontWeight: '800',
   },
 });
