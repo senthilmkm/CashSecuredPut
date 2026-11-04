@@ -356,64 +356,57 @@ export default function RollSimulator({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      {/* Header Banner */}
-      <View style={styles.headerCard}>
-        <RefreshCw color="#3B82F6" size={24} style={{ marginBottom: 8 }} />
-        <Text style={styles.headerTitle}>CSP Roll Down & Out Simulator</Text>
-        <Text style={styles.headerDesc}>
-          Adjust strike price and extend expiration to lock in a net credit when a stock moves down.
-        </Text>
-      </View>
-
-      {/* Active Position Being Rolled Banner */}
-      {initialData?.ticker && (
-        <View style={styles.activeTradeBanner}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.activeTradeTicker}>
-              Rolling: {initialData.ticker} (${initialData.strikePrice?.toFixed(2)} Put)
+      {/* Slim Header & Active Stock Indicator */}
+      <View style={styles.slimHeaderCard}>
+        <View style={styles.slimHeaderTopRow}>
+          <View style={styles.tickerBadgeBox}>
+            <Text style={styles.tickerBadgeText}>{ticker}</Text>
+          </View>
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={styles.slimHeaderTitle}>
+              {initialData?.ticker ? `Rolling ${initialData.ticker} Put` : `Roll Simulator • ${ticker}`}
             </Text>
-            <Text style={styles.activeTradeSub}>
-              Initial Premium: +${(initialData.cumulativeCostBasisCredit || initialData.cumulativePremium || initialData.premium || 0).toFixed(2)}/sh • {initialData.contracts} Contract{initialData.contracts > 1 ? 's' : ''}
+            <Text style={styles.slimHeaderSub}>
+              {initialData?.ticker
+                ? `${initialData.contracts} Contract${initialData.contracts > 1 ? 's' : ''} • Original $${parseFloat(initialData.strikePrice).toFixed(2)} Strike`
+                : 'Roll strike & extend DTE for net credit'}
             </Text>
           </View>
-          {onDismissActiveTrade && (
+          {initialData?.ticker && onDismissActiveTrade && (
             <TouchableOpacity
-              style={styles.dismissBtn}
+              style={styles.dismissBtnCompact}
               onPress={onDismissActiveTrade}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               activeOpacity={0.7}
             >
-              <X size={16} color="#A7F3D0" />
+              <X size={15} color="#A7F3D0" />
             </TouchableOpacity>
           )}
         </View>
-      )}
 
-      {/* Standalone Stock Selector Bar */}
-      {!initialData?.ticker && (
-        <View style={styles.tickerSelectorCard}>
-          <Text style={styles.tickerSelectorLabel}>Select Stock to Roll:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tickerPillsRow}>
+        {/* Quick Ticker Chips when in standalone mode */}
+        {!initialData?.ticker && (
+          <View style={styles.quickTickerBar}>
             {['AAPL', 'NVDA', 'TSLA', 'MSFT', 'SPY'].map((sym) => (
               <TouchableOpacity
                 key={sym}
-                style={[styles.tickerPill, ticker === sym && styles.tickerPillActive]}
+                style={[styles.quickTickerBtn, ticker === sym && styles.quickTickerBtnActive]}
                 onPress={() => handleSelectQuickTicker(sym)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.tickerPillText, ticker === sym && styles.tickerPillTextActive]}>
+                <Text style={[styles.quickTickerText, ticker === sym && styles.quickTickerTextActive]}>
                   {sym}
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-        </View>
-      )}
+          </View>
+        )}
+      </View>
 
       {/* Paywall Lock Ribbon for Free Users */}
       {!isPremium && (
         <TouchableOpacity style={styles.proRibbon} onPress={onOpenPaywall} activeOpacity={0.85}>
-          <Crown color="#F59E0B" size={18} style={{ marginRight: 8 }} />
+          <Crown color="#F59E0B" size={14} style={{ marginRight: 6 }} />
           <Text style={styles.proRibbonText}>Pro Feature: Unlock Full Roll Simulator & Execution</Text>
         </TouchableOpacity>
       )}
@@ -890,110 +883,142 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0F19',
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: 12,
+    paddingBottom: 28,
   },
-  headerCard: {
+  slimHeaderCard: {
     backgroundColor: '#161E2E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    marginBottom: 4,
-  },
-  headerDesc: {
-    fontSize: 13,
-    color: '#94A3B8',
-    lineHeight: 18,
-  },
-  activeTradeBanner: {
+  slimHeaderTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#0F291E',
+  },
+  tickerBadgeBox: {
+    backgroundColor: '#1E3A8A',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#10B981',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    borderColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  activeTradeTicker: {
-    color: '#10B981',
+  tickerBadgeText: {
+    color: '#60A5FA',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  slimHeaderTitle: {
+    fontSize: 13,
     fontWeight: '800',
-    fontSize: 14,
-    marginBottom: 2,
+    color: '#F8FAFC',
+    lineHeight: 16,
   },
-  activeTradeSub: {
-    color: '#A7F3D0',
+  slimHeaderSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 1,
+  },
+  dismissBtnCompact: {
+    padding: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quickTickerBar: {
+    flexDirection: 'row',
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+  },
+  quickTickerBtn: {
+    backgroundColor: '#0B0F19',
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  quickTickerBtnActive: {
+    backgroundColor: '#1E3A8A',
+    borderColor: '#3B82F6',
+  },
+  quickTickerText: {
+    color: '#94A3B8',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  quickTickerTextActive: {
+    color: '#60A5FA',
+    fontWeight: '800',
   },
   proRibbon: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#451A03',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
+    padding: 9,
+    borderRadius: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#D97706',
   },
   proRibbonText: {
     color: '#F59E0B',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
   },
   compareGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   compareCol: {
-    width: '48%',
+    width: '48.5%',
     backgroundColor: '#161E2E',
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
   colHeaderTitle: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#F8FAFC',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   inputLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#94A3B8',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   numInput: {
     backgroundColor: '#0B0F19',
-    borderRadius: 8,
+    borderRadius: 7,
     borderWidth: 1,
     borderColor: '#334155',
     color: '#F8FAFC',
-    paddingHorizontal: 10,
-    height: 38,
-    fontSize: 14,
+    paddingHorizontal: 8,
+    height: 34,
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   outcomeCard: {
     backgroundColor: '#161E2E',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
   outcomeTitle: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#F8FAFC',
   },
@@ -1001,19 +1026,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   liveQuoteTag: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#10B981',
   },
   liveQuoteTagText: {
     color: '#10B981',
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -1027,66 +1052,66 @@ const styles = StyleSheet.create({
   },
   liveBadgeMiniText: {
     color: '#10B981',
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
   summaryCallout: {
     flexDirection: 'row',
     backgroundColor: '#0F172A',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
   summaryCalloutText: {
     flex: 1,
     color: '#E2E8F0',
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 10.5,
+    lineHeight: 15,
     fontWeight: '500',
   },
   outcomeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   outcomeLabel: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: '#E2E8F0',
     fontWeight: '600',
   },
   outcomeHelper: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#64748B',
     marginTop: 1,
   },
   outcomeHighlightRow: {
     backgroundColor: '#0B0F19',
-    padding: 10,
-    borderRadius: 10,
-    marginVertical: 6,
+    padding: 8,
+    borderRadius: 8,
+    marginVertical: 4,
   },
   outcomeHighlightLabel: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#F8FAFC',
   },
   outcomeHighlightHelper: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#94A3B8',
     marginTop: 1,
   },
   outcomeHighlightVal: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
   },
   divider: {
     height: 1,
     backgroundColor: '#1E293B',
-    marginVertical: 10,
+    marginVertical: 8,
   },
   textSuccess: {
     color: '#10B981',
@@ -1101,32 +1126,32 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   applyBtn: {
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
-    marginTop: 14,
+    marginTop: 10,
   },
   applyGradient: {
-    paddingVertical: 14,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   applyBtnText: {
     color: '#FFF',
     fontWeight: '800',
-    fontSize: 15,
+    fontSize: 13.5,
   },
   presetsCard: {
     backgroundColor: '#161E2E',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 14,
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
   presetsTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#94A3B8',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   presetsRow: {
     flexDirection: 'row',
@@ -1135,16 +1160,16 @@ const styles = StyleSheet.create({
   presetBtn: {
     flex: 1,
     backgroundColor: '#0F172A',
-    borderRadius: 8,
-    paddingVertical: 8,
+    borderRadius: 6,
+    paddingVertical: 5.5,
     alignItems: 'center',
-    marginHorizontal: 3,
+    marginHorizontal: 2.5,
     borderWidth: 1,
     borderColor: '#1E3A8A',
   },
   presetBtnText: {
     color: '#3B82F6',
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   presetBtnStrike: {
@@ -1152,7 +1177,7 @@ const styles = StyleSheet.create({
   },
   presetBtnTextStrike: {
     color: '#10B981',
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   textWarning: {
@@ -1164,7 +1189,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   dismissBtn: {
-    padding: 6,
+    padding: 4,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1172,9 +1197,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0F172A',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 14,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
     borderWidth: 1,
     borderColor: '#1E3A8A',
   },

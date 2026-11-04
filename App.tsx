@@ -336,8 +336,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0F19',
   },
   topHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: '#161E2E',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
@@ -348,17 +348,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900',
     color: '#F8FAFC',
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   tierBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
   },
   badgePro: {
     backgroundColor: '#F59E0B',
