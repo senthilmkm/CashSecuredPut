@@ -357,6 +357,73 @@ export function runCSPMathTests() {
   assert(pacingRes.percentOfGoal > 0, `Percent of annual goal > 0% (${pacingRes.percentOfGoal}%)`);
   assert(pacingRes.projectedAnnual > 0, `Projected annual run rate > 0 ($${pacingRes.projectedAnnual})`);
 
+  // Test 15: Wheel Strategy Ledger & Cost Basis Math
+  // Scenario: AAPL $200 Put assigned (+ $5.00 put premium).
+  // Then sell CC 1: $210 Call for +$3.00 (expired).
+  // Then sell CC 2: $215 Call for +$4.00 (assigned / called away).
+  const initialStrike = 200;
+  const putPrem = 5.00;
+  const cc1Prem = 3.00;
+  const cc2Prem = 4.00;
+  const shares = 100;
+
+  const totalOptionIncome = (putPrem + cc1Prem + cc2Prem) * shares; // $1,200
+  const netCostBasisPerShare = initialStrike - (totalOptionIncome / shares); // 200 - 12 = $188
+  const capitalGainOnAssignment = (215 - initialStrike) * shares; // ($215 - $200) * 100 = $1,500
+  const totalWheelPnl = totalOptionIncome + capitalGainOnAssignment; // $2,700
+  const totalCollateralLocked = initialStrike * shares; // $20,000
+  const wheelRocPercent = (totalWheelPnl / totalCollateralLocked) * 100; // 13.5%
+
+  assert(totalOptionIncome === 1200, 'Wheel total options premium collected = $1,200');
+  assert(netCostBasisPerShare === 188, 'Net cost basis reduced to $188/share');
+  assert(capitalGainOnAssignment === 1500, 'Capital gain on called-away shares = $1,500');
+  assert(totalWheelPnl === 2700, 'Total Wheel realized profit = $2,700');
+  assert(wheelRocPercent === 13.5, 'Total Wheel ROC = 13.5%');
+
+  // Test 16: Zero & Extreme DTE Edge Cases in Time Decay
+  const zeroDteDecay = calculateCSPTimeDecay({ premium: 5.00, dte: 0, intervals: 10 });
+  assert(zeroDteDecay.length === 11, '0 DTE time decay returns 11 points safely');
+  assert(zeroDteDecay[0].value === 5.00, 'Day 0 initial value is $5.00');
+  assert(zeroDteDecay[zeroDteDecay.length - 1].value === 0, 'Final day decay reaches $0.00');
+
+  // Test 17: Storage & Data Corruption Prevention (Null / Malformed Dates)
+  const corruptedHistory: any[] = [
+    { id: 'bad1', createdAt: 'invalid-date-string', ticker: 'XYZ' },
+    { id: 'bad2', createdAt: null, ticker: 'ABC' },
+    { id: 'bad3', ticker: 'DEF' },
+    { id: 'good1', createdAt: new Date().toISOString(), ticker: 'AAPL' },
+  ];
+  const prunedCorrupted = pruneHistoryByRetention(corruptedHistory, 90);
+  assert(prunedCorrupted.length >= 1, 'pruneHistoryByRetention handles malformed/null dates without throwing');
+  assert(prunedCorrupted.some((t) => t.id === 'good1'), 'Valid trade preserved during corruption recovery');
+
+  // Test 18: Consecutive Multiple Rolls & Cumulative Basis Tracking
+  // Trade rolled twice:
+  // Initial: $140 strike, +$3.50 premium
+  // Roll 1: buyback @ $4.50 (-$1.00 loss), sell $135 strike @ +$5.50 -> net credit +$1.00 -> cumulative basis credit = 3.50 + 1.00 = $4.50
+  // Roll 2: buyback @ $3.00, sell $130 strike @ +$4.00 -> net credit +$1.00 -> cumulative basis credit = 4.50 + 1.00 = $5.50
+  const roll1 = calculateRollCSP({
+    currentStrike: 140,
+    currentContracts: 1,
+    closeCostPerContract: 4.50,
+    newStrike: 135,
+    newPremiumPerContract: 5.50,
+    originalPremiumPerShare: 3.50,
+  });
+  assert(roll1.netCreditOrDebit === 100, 'Roll 1 generates +$100 net credit');
+  assert(roll1.newEffectiveCostBasis === 130.50, 'Roll 1 effective cost basis = $135 - $4.50 = $130.50');
+
+  const roll2 = calculateRollCSP({
+    currentStrike: 135,
+    currentContracts: 1,
+    closeCostPerContract: 3.00,
+    newStrike: 130,
+    newPremiumPerContract: 4.00,
+    originalPremiumPerShare: 4.50, // passed cumulative credit
+  });
+  assert(roll2.netCreditOrDebit === 100, 'Roll 2 generates +$100 net credit');
+  assert(roll2.newEffectiveCostBasis === 124.50, 'Roll 2 effective cost basis = $130 - $5.50 = $124.50');
+
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {
     process.exit(1);

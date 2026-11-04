@@ -408,8 +408,8 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
               <Text style={styles.phaseBadgeText}>
                 {pos.phase === 'csp' && 'Phase 1: Cash-Secured Put'}
                 {pos.phase === 'assigned_shares' && 'Phase 2: Assigned Shares'}
-                {pos.phase === 'covered_call' && `Phase 3: Selling CCs (${summary.ccCount})`}
-                {pos.phase === 'completed' && `🏆 Wheel Complete (+${summary.overallRocPercent.toFixed(1)}% ROC)`}
+                {pos.phase === 'covered_call' && `Phase 3: Selling Covered Calls (${summary.ccCount})`}
+                {pos.phase === 'completed' && `🏆 Wheel Complete (+${summary.overallRocPercent.toFixed(1)}% Return)`}
               </Text>
             </View>
 
@@ -440,9 +440,9 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
           </View>
 
           <View style={styles.ledgerCell}>
-            <Text style={styles.cellLabel}>Total Income / ROC</Text>
+            <Text style={styles.cellLabel}>Total Income / Return</Text>
             <Text style={styles.cellValueSuccess}>+${summary.totalIncome.toFixed(0)}</Text>
-            <Text style={styles.cellSub}>{summary.overallRocPercent.toFixed(1)}% ROC</Text>
+            <Text style={styles.cellSub}>+{summary.overallRocPercent.toFixed(1)}% Return</Text>
           </View>
         </View>
 
@@ -454,7 +454,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
               <Text style={styles.completedCelebrationTitle}>Wheel Strategy Completed Successfully!</Text>
             </View>
             <Text style={styles.completedCelebrationText}>
-              Total Realized Gain: +${summary.totalRealizedPnl.toFixed(2)} ({summary.overallRocPercent.toFixed(1)}% ROC) across {summary.ccCount} Covered Call cycle{summary.ccCount !== 1 ? 's' : ''}.
+              Total Realized Gain: +${summary.totalRealizedPnl.toFixed(2)} (+${summary.overallRocPercent.toFixed(1)}% Return) across {summary.ccCount} Covered Call cycle{summary.ccCount !== 1 ? 's' : ''}.
             </Text>
           </View>
         )}
@@ -466,7 +466,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
             {pos.coveredCallsSold.map((cc, i) => (
               <View key={cc.id || i} style={styles.ccItemCard}>
                 <View style={styles.ccRow}>
-                  <Text style={styles.ccText}>• Sold ${cc.strike} Call ({cc.dte} DTE)</Text>
+                  <Text style={styles.ccText}>• Sold ${cc.strike} Call ({cc.dte} Days Left)</Text>
                   <Text style={styles.ccPrem}>+${cc.premium.toFixed(2)}/sh (+${(cc.premium * pos.shares).toFixed(0)})</Text>
                 </View>
 
@@ -484,7 +484,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
                         style={styles.ccAssignBtn}
                         onPress={() => handleUpdateCCStatus(pos.id, cc.id, 'assigned')}
                       >
-                        <Text style={styles.ccAssignText}>Assigned (Called Away)</Text>
+                        <Text style={styles.ccAssignText}>Sold @ Strike (Called Away)</Text>
                       </TouchableOpacity>
                     </View>
                   ) : cc.status === 'expired' ? (

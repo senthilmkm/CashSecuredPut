@@ -141,6 +141,33 @@ const MODULES: Module[] = [
       },
     ],
   },
+  {
+    id: 'jargon_buster',
+    title: '6. Plain-English Jargon Buster',
+    subtitle: 'Every option term explained in 1 simple sentence for new traders',
+    icon: Lightbulb,
+    iconColor: '#F59E0B',
+    content: [
+      {
+        heading: 'Common Options Terms Translated to Normal English',
+        body: 'You do not need an MBA or Wall Street dictionary to generate monthly options income. Here is what every term means in plain English:',
+        bullets: [
+          'Strike Price: The agreed purchase price per share you promise to pay if the stock drops.',
+          'Premium: Instant cash deposited into your brokerage account today that you keep 100% no matter what happens.',
+          'Cash Collateral: Real cash set aside in your account ($Strike × 100 shares) so you never risk margin debt or borrowing money.',
+          'DTE (Days to Expiration): How many calendar days until the option contract officially ends.',
+          'OTM (Out-of-the-Money): Stock price is ABOVE your strike price. This is your ideal outcome—you keep all cash and buy zero shares.',
+          'ITM (In-the-Money): Stock price is BELOW your strike price. You will likely purchase 100 shares at your discounted strike price.',
+          'Breakeven / Effective Basis: Your actual net purchase price per share (Strike Price minus Premium Received).',
+          'Theta (Time Decay): The daily loss of the option\'s value that puts cash profit into your pocket each day as the seller.',
+          'Delta: A rough estimate of the probability that the option will expire in-the-money (e.g. 0.20 Delta ≈ 80% win rate).',
+          'Rolling: Closing your current option and opening a new one further in the future to collect fresh cash and prevent assignment.',
+          'The Wheel Strategy: Sell cash-secured put → get assigned at discount → sell covered calls → collect profits and repeat.',
+        ],
+        proTip: 'Whenever you see an unfamiliar term in the app, remember: you are an income collector being paid cash to agree to buy quality stocks at a discount!',
+      },
+    ],
+  },
 ];
 
 export default function GuideCenter() {

@@ -273,7 +273,7 @@ export default function App() {
           onPress={() => setCurrentTab('wheel')}
         >
           <RotateCcw color={currentTab === 'wheel' ? '#10B981' : '#64748B'} size={20} />
-          <Text style={[styles.tabLabel, currentTab === 'wheel' && styles.tabLabelActive]}>Wheel Suite</Text>
+          <Text style={[styles.tabLabel, currentTab === 'wheel' && styles.tabLabelActive]}>Wheel</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -296,7 +296,7 @@ export default function App() {
           onPress={() => setCurrentTab('guides')}
         >
           <BookOpen color={currentTab === 'guides' ? '#10B981' : '#64748B'} size={20} />
-          <Text style={[styles.tabLabel, currentTab === 'guides' && styles.tabLabelActive]}>Masterclass</Text>
+          <Text style={[styles.tabLabel, currentTab === 'guides' && styles.tabLabelActive]}>Learn</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

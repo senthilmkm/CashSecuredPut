@@ -582,7 +582,7 @@ export default function Calculator({
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
                     <Text style={styles.heroMetricLabelSmall}>Annual APR</Text>
                     <Text style={styles.heroMetricValSuccess}>{metrics.annualizedApr}%</Text>
-                    <Text style={styles.heroMetricSubSmall}>ROC: {metrics.returnOnCapitalPercent}%</Text>
+                    <Text style={styles.heroMetricSubSmall}>Return: {metrics.returnOnCapitalPercent}%</Text>
                   </View>
                 </View>
               </View>
@@ -776,7 +776,7 @@ export default function Calculator({
               </View>
               {metrics?.greeks && (
                 <Text style={styles.drawerSummaryText} numberOfLines={1}>
-                  Δ {metrics.greeks.delta}  •  θ +${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d  •  PoP {metrics.greeks.probabilityOfProfit}%  •  {dte} DTE
+                  Win Rate {metrics.greeks.probabilityOfProfit}%  •  Daily Income +${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d  •  {dte} Days Left
                 </Text>
               )}
             </View>
@@ -800,7 +800,7 @@ export default function Calculator({
                   </View>
                   <View style={styles.greekDivider} />
                   <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>Prob of Profit</Text>
+                    <Text style={styles.greekLabel}>Win Prob</Text>
                     <Text style={styles.greekValSuccess}>{metrics.greeks.probabilityOfProfit}%</Text>
                   </View>
                   <View style={styles.greekDivider} />
@@ -812,12 +812,12 @@ export default function Calculator({
                   </View>
                   <View style={styles.greekDivider} />
                   <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>θ Decay</Text>
+                    <Text style={styles.greekLabel}>Daily Decay</Text>
                     <Text style={styles.greekVal}>+${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d</Text>
                   </View>
                   <View style={styles.greekDivider} />
                   <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>Implied Vol</Text>
+                    <Text style={styles.greekLabel}>Volatility (IV)</Text>
                     <Text style={styles.greekVal}>{metrics.greeks.impliedVolEstimate}%</Text>
                   </View>
                 </View>

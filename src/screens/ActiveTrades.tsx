@@ -283,7 +283,7 @@ export default function ActiveTrades({
               <Text style={styles.overviewLabel}>Active Net Premium</Text>
               <Text style={styles.overviewValSuccess}>+${totalPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
               <Text style={styles.overviewSub}>
-                Avg ROC: {totalCollateral > 0 ? ((totalPremium / totalCollateral) * 100).toFixed(2) : '0.00'}%
+                Avg Return: {totalCollateral > 0 ? ((totalPremium / totalCollateral) * 100).toFixed(2) : '0.00'}%
               </Text>
             </View>
           </View>
@@ -508,14 +508,14 @@ export default function ActiveTrades({
                 style={[styles.filterChip, selectedFilter === 'itm' && styles.filterChipActive]}
                 onPress={() => setSelectedFilter('itm')}
               >
-                <Text style={[styles.filterChipText, selectedFilter === 'itm' && styles.filterTextActive]}>ITM Risk ({itmCount})</Text>
+                <Text style={[styles.filterChipText, selectedFilter === 'itm' && styles.filterTextActive]}>At Risk (ITM) ({itmCount})</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.filterChip, selectedFilter === 'expiring' && styles.filterChipActive]}
                 onPress={() => setSelectedFilter('expiring')}
               >
-                <Text style={[styles.filterChipText, selectedFilter === 'expiring' && styles.filterTextActive]}>≤5 DTE</Text>
+                <Text style={[styles.filterChipText, selectedFilter === 'expiring' && styles.filterTextActive]}>Expiring Soon (≤5d)</Text>
               </TouchableOpacity>
             </View>
 
