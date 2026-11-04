@@ -448,167 +448,8 @@ export default function Calculator({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        
-        {/* SIMULATED / MOCK DATA WARNING BANNER */}
-        {isSimulatedData && (
-          <View style={styles.simulatedBanner}>
-            <AlertTriangle size={16} color="#F59E0B" style={{ marginRight: 8 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.simulatedBannerTitle}>Simulated Market Data</Text>
-              <Text style={styles.simulatedBannerDesc}>
-                Live broker feed is currently unavailable. Strikes and option prices are estimated models. Verify live quotes with your broker before trading.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* EARNINGS CLIFF RISK WARNING BANNER */}
-        {earningsRisk.hasEarningsRisk && (
-          <View style={styles.earningsBanner}>
-            <Calendar size={16} color="#EF4444" style={{ marginRight: 8 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.earningsBannerTitle}>
-                Earnings Risk: {ticker.toUpperCase()} on {earningsRisk.earningsDate}
-              </Text>
-              <Text style={styles.earningsBannerDesc}>
-                Earnings release scheduled {earningsRisk.daysUntilEarnings === 0 ? 'today' : `in ${earningsRisk.daysUntilEarnings} days`}, before this option expires. High risk of volatility collapse and post-earnings gap down.
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* 1. HERO SCORECARD & HEALTH GAUGE CARD */}
-        {metrics && (
-          <View style={styles.scoreCard}>
-            <View style={styles.scoreHeader}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                  <Text style={styles.scoreTitle}>{ticker} CSP Health Scorecard</Text>
-                  <View style={[styles.scoreBadge, { backgroundColor: getScoreColor(metrics.score) }]}>
-                    <Text style={styles.scoreBadgeText}>{metrics.score}/100</Text>
-                  </View>
-                </View>
-                <Text style={styles.recTitleText}>{metrics.recommendationTitle}</Text>
-              </View>
-            </View>
-
-            {/* 4-Card Metrics Grid */}
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel} numberOfLines={1}>Collateral</Text>
-                <Text style={styles.metricValuePrimary} numberOfLines={1} adjustsFontSizeToFit>${metrics.collateralRequired.toLocaleString()}</Text>
-                <Text style={styles.metricSub} numberOfLines={1}>{parsedContracts * 100} shares</Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel} numberOfLines={1}>Net Income</Text>
-                <Text style={styles.metricValueSuccess} numberOfLines={1} adjustsFontSizeToFit>+${metrics.netPremium.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
-                <Text style={styles.metricSub} numberOfLines={1}>ROC: {metrics.returnOnCapitalPercent}%</Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel} numberOfLines={1}>Annual APR</Text>
-                <Text style={styles.metricValuePrimary} numberOfLines={1} adjustsFontSizeToFit>{metrics.annualizedApr}%</Text>
-                <Text style={styles.metricSub} numberOfLines={1}>APY: {metrics.annualizedApy}%</Text>
-              </View>
-
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel} numberOfLines={1}>Cost Basis</Text>
-                <Text style={styles.metricValueSuccess} numberOfLines={1} adjustsFontSizeToFit>${metrics.effectiveCostBasis.toFixed(2)}</Text>
-                <Text style={styles.metricSub} numberOfLines={1}>{metrics.effectiveDiscountPercent}% discount</Text>
-              </View>
-            </View>
-
-            {/* Toggle Button for Advanced Greeks & Payoff Chart */}
-            <TouchableOpacity
-              style={styles.toggleChartBtn}
-              onPress={() => setShowAdvancedChart(!showAdvancedChart)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.toggleChartText}>
-                {showAdvancedChart ? 'Hide Greeks & Payoff Chart' : 'Show Greeks & Payoff Chart'}
-              </Text>
-              {showAdvancedChart ? (
-                <ChevronUp size={14} color="#60A5FA" style={{ marginLeft: 4 }} />
-              ) : (
-                <ChevronDown size={14} color="#60A5FA" style={{ marginLeft: 4 }} />
-              )}
-            </TouchableOpacity>
-
-            {/* Delta & Probability of Profit Banner */}
-            {showAdvancedChart && metrics.greeks && (
-              <View>
-                <View style={styles.greeksBar}>
-                  <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>Delta</Text>
-                    <Text style={styles.greekVal}>{metrics.greeks.delta}</Text>
-                  </View>
-
-                  <View style={styles.greekDivider} />
-
-                  <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>Prob of Profit</Text>
-                    <Text style={styles.greekValSuccess}>{metrics.greeks.probabilityOfProfit}%</Text>
-                  </View>
-
-                  <View style={styles.greekDivider} />
-
-                  <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>Assignment</Text>
-                    <Text style={metrics.greeks.probabilityAssignment > 30 ? styles.greekValDanger : styles.greekVal}>{metrics.greeks.probabilityAssignment}%</Text>
-                  </View>
-
-                  <View style={styles.greekDivider} />
-
-                  <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>$\theta$ Decay</Text>
-                    <Text style={styles.greekVal}>+${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d</Text>
-                  </View>
-
-                  <View style={styles.greekDivider} />
-
-                  <View style={styles.greekItem}>
-                    <Text style={styles.greekLabel}>Implied Vol</Text>
-                    <Text style={styles.greekVal}>{metrics.greeks.impliedVolEstimate}%</Text>
-                  </View>
-                </View>
-
-                {/* IV Override Input */}
-                <View style={styles.ivRow}>
-                  <Text style={styles.ivLabel}>Custom IV %:</Text>
-                  <TextInput
-                    style={styles.ivInput}
-                    value={customIv}
-                    onChangeText={setCustomIv}
-                    placeholder={`${metrics.greeks.impliedVolEstimate}%`}
-                    placeholderTextColor="#64748B"
-                    keyboardType="numeric"
-                  />
-                  {customIv ? (
-                    <TouchableOpacity onPress={() => setCustomIv('')} style={styles.ivResetBtn}>
-                      <Text style={styles.ivResetText}>Reset</Text>
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* 1.5 INTERACTIVE EXPIRATION PAYOFF CHART */}
-        {showAdvancedChart && metrics && (
-          <PayoffChart
-            stockPrice={parseFloat(stockPrice) || 0}
-            strikePrice={parseFloat(strikePrice) || 0}
-            premium={parseFloat(premium) || 0}
-            contracts={parsedContracts}
-          />
-        )}
-
-        {/* 2. SEARCH & PARAMETERS CARD */}
-        <View style={styles.formCard}>
-          <Text style={styles.cardSectionTitle}>Search & Trade Parameters</Text>
-          
+        {/* 1. TICKER SEARCH & QUICK CHIPS */}
+        <View style={styles.searchCard}>
           <View style={styles.searchRow}>
             <View style={styles.tickerBox}>
               <Search color="#94A3B8" size={16} style={{ marginRight: 6 }} />
@@ -647,65 +488,109 @@ export default function Calculator({
               </TouchableOpacity>
             ))}
           </View>
-
-          {/* Form Matrix */}
-          <View style={styles.formMatrix}>
-            <View style={styles.mCol}>
-              <Text style={styles.mLabel}>Stock ($)</Text>
-              <TextInput style={styles.mInput} value={stockPrice} onChangeText={setStockPrice} keyboardType="decimal-pad" />
-            </View>
-
-            <View style={styles.mCol}>
-              <Text style={styles.mLabel}>Strike ($)</Text>
-              <TextInput style={styles.mInput} value={strikePrice} onChangeText={setStrikePrice} keyboardType="decimal-pad" />
-            </View>
-
-            <View style={styles.mCol}>
-              <Text style={styles.mLabel}>Prem ($)</Text>
-              <TextInput style={styles.mInput} value={premium} onChangeText={setPremium} keyboardType="decimal-pad" />
-            </View>
-
-            <View style={styles.mCol}>
-              <Text style={styles.mLabel}>Cnts</Text>
-              <TextInput style={styles.mInput} value={contracts} onChangeText={setContracts} keyboardType="number-pad" />
-            </View>
-
-            <View style={styles.mCol}>
-              <Text style={styles.mLabel}>DTE</Text>
-              <TextInput style={styles.mInput} value={dte} onChangeText={handleDteChange} keyboardType="number-pad" />
-            </View>
-          </View>
-
-          {/* Dynamic Helper Bar */}
-          <View style={styles.helperBar}>
-            <Text style={styles.helperBarText}>
-              Total Net Premium Collected: <Text style={{ color: '#10B981', fontWeight: '800' }}>+${totalCashCollected.toFixed(2)}</Text> ({parsedContracts * 100} shares locked)
-            </Text>
-          </View>
-
-          {/* DTE Syncing Spinner or 0DTE Indicator */}
-          {isSyncingDte && (
-            <View style={styles.syncingBanner}>
-              <ActivityIndicator size="small" color="#60A5FA" style={{ marginRight: 8 }} />
-              <Text style={styles.syncingBannerText}>
-                {dte === '0'
-                  ? 'Recalculating for 0 DTE (Same-Day Expiration)...'
-                  : `Recalculating & Fetching ${dte || '30'}-Day Put Chain...`}
-              </Text>
-            </View>
-          )}
-
-          {dte === '0' && !isSyncingDte && (
-            <View style={styles.zeroDteBanner}>
-              <Sparkles size={13} color="#F59E0B" style={{ marginRight: 6 }} />
-              <Text style={styles.zeroDteBannerText}>
-                ⚡ 0 DTE: Evaluated as same-day expiration trade.
-              </Text>
-            </View>
-          )}
         </View>
 
-        {/* 3. LIVE OPTIONS CHAIN CARD */}
+        {/* SIMULATED / MOCK DATA WARNING BANNER */}
+        {isSimulatedData && (
+          <View style={styles.simulatedBanner}>
+            <AlertTriangle size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.simulatedBannerTitle}>Simulated Market Data</Text>
+              <Text style={styles.simulatedBannerDesc}>
+                Live broker feed is currently unavailable. Strikes and option prices are estimated models. Verify live quotes with your broker before trading.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* EARNINGS CLIFF RISK WARNING BANNER */}
+        {earningsRisk.hasEarningsRisk && (
+          <View style={styles.earningsBanner}>
+            <Calendar size={16} color="#EF4444" style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.earningsBannerTitle}>
+                Earnings Risk: {ticker.toUpperCase()} on {earningsRisk.earningsDate}
+              </Text>
+              <Text style={styles.earningsBannerDesc}>
+                Earnings release scheduled {earningsRisk.daysUntilEarnings === 0 ? 'today' : `in ${earningsRisk.daysUntilEarnings} days`}, before this option expires. High risk of volatility collapse and post-earnings gap down.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* DTE Syncing Spinner or 0DTE Indicator */}
+        {isSyncingDte && (
+          <View style={styles.syncingBanner}>
+            <ActivityIndicator size="small" color="#60A5FA" style={{ marginRight: 8 }} />
+            <Text style={styles.syncingBannerText}>
+              {dte === '0'
+                ? 'Recalculating for 0 DTE (Same-Day Expiration)...'
+                : `Recalculating & Fetching ${dte || '30'}-Day Put Chain...`}
+            </Text>
+          </View>
+        )}
+
+        {dte === '0' && !isSyncingDte && (
+          <View style={styles.zeroDteBanner}>
+            <Sparkles size={13} color="#F59E0B" style={{ marginRight: 6 }} />
+            <Text style={styles.zeroDteBannerText}>
+              ⚡ 0 DTE: Evaluated as same-day expiration trade.
+            </Text>
+          </View>
+        )}
+
+        {/* 2. HERO SCORECARD & "THE BIG THREE" INCOME CARD */}
+        {metrics && (
+          <View style={styles.scoreCard}>
+            <View style={styles.scoreHeroRow}>
+              {/* Left: Circular Health Score Gauge */}
+              <View style={styles.scoreGaugeContainer}>
+                <View style={[styles.scoreRing, { borderColor: getScoreColor(metrics.score) }]}>
+                  <Text style={[styles.scoreRingNumber, { color: getScoreColor(metrics.score) }]}>
+                    {metrics.score}
+                  </Text>
+                  <Text style={styles.scoreRingDenominator}>/100</Text>
+                </View>
+                <View style={[styles.scorePill, { backgroundColor: `${getScoreColor(metrics.score)}22`, borderColor: getScoreColor(metrics.score) }]}>
+                  <Text style={[styles.scorePillText, { color: getScoreColor(metrics.score) }]}>
+                    {metrics.recommendationTitle}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Right: The Big Three Income Metrics */}
+              <View style={styles.heroMetricsCol}>
+                <View style={styles.heroMetricItem}>
+                  <Text style={styles.heroMetricLabel}>Total Cash Income</Text>
+                  <Text style={styles.heroMetricCash}>
+                    +${metrics.netPremium.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </Text>
+                  <Text style={styles.heroMetricSub}>
+                    Basis: ${metrics.effectiveCostBasis.toFixed(2)} ({metrics.effectiveDiscountPercent}% discount)
+                  </Text>
+                </View>
+
+                <View style={styles.heroMetricDivider} />
+
+                <View style={styles.heroRowBottom}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.heroMetricLabelSmall}>Collateral</Text>
+                    <Text style={styles.heroMetricValSmall}>${metrics.collateralRequired.toLocaleString()}</Text>
+                    <Text style={styles.heroMetricSubSmall}>{parsedContracts * 100} shares</Text>
+                  </View>
+
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={styles.heroMetricLabelSmall}>Annual APR</Text>
+                    <Text style={styles.heroMetricValSuccess}>{metrics.annualizedApr}%</Text>
+                    <Text style={styles.heroMetricSubSmall}>ROC: {metrics.returnOnCapitalPercent}%</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* 3. LIVE OPTIONS CHAIN CARD (Front & Center) */}
         <View style={styles.chainCard}>
           <View style={styles.chainHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -851,7 +736,7 @@ export default function Calculator({
           )}
         </View>
 
-        {/* 4. ACTION BUTTONS */}
+        {/* 4. PRIMARY ACTION BUTTONS */}
         <View style={styles.actionButtonsRow}>
           <TouchableOpacity style={styles.saveTradeBtn} onPress={handleSavePosition} activeOpacity={0.85}>
             <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
@@ -876,6 +761,134 @@ export default function Calculator({
             <Text style={styles.rollBtnText}>Roll Simulator</Text>
           </TouchableOpacity>
         </View>
+
+        {/* 5. EXPANDABLE "TRADE DETAILS, GREEKS & MANUAL ADJUSTMENTS" TRAY */}
+        <View style={styles.advancedDrawerCard}>
+          <TouchableOpacity
+            style={styles.drawerHeader}
+            onPress={() => setShowAdvancedChart(!showAdvancedChart)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Target size={15} color="#60A5FA" style={{ marginRight: 6 }} />
+                <Text style={styles.drawerTitle}>Trade Details, Greeks & Adjustments</Text>
+              </View>
+              {metrics?.greeks && (
+                <Text style={styles.drawerSummaryText} numberOfLines={1}>
+                  Δ {metrics.greeks.delta}  •  θ +${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d  •  PoP {metrics.greeks.probabilityOfProfit}%  •  {dte} DTE
+                </Text>
+              )}
+            </View>
+            <View style={styles.drawerChevronBox}>
+              {showAdvancedChart ? (
+                <ChevronUp size={16} color="#94A3B8" />
+              ) : (
+                <ChevronDown size={16} color="#94A3B8" />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {showAdvancedChart && (
+            <View style={styles.drawerContent}>
+              {/* Greeks Grid */}
+              {metrics?.greeks && (
+                <View style={styles.greeksBar}>
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Delta</Text>
+                    <Text style={styles.greekVal}>{metrics.greeks.delta}</Text>
+                  </View>
+                  <View style={styles.greekDivider} />
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Prob of Profit</Text>
+                    <Text style={styles.greekValSuccess}>{metrics.greeks.probabilityOfProfit}%</Text>
+                  </View>
+                  <View style={styles.greekDivider} />
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Assignment</Text>
+                    <Text style={metrics.greeks.probabilityAssignment > 30 ? styles.greekValDanger : styles.greekVal}>
+                      {metrics.greeks.probabilityAssignment}%
+                    </Text>
+                  </View>
+                  <View style={styles.greekDivider} />
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>θ Decay</Text>
+                    <Text style={styles.greekVal}>+${(metrics.greeks.thetaPerDay * parsedContracts * 100).toFixed(2)}/d</Text>
+                  </View>
+                  <View style={styles.greekDivider} />
+                  <View style={styles.greekItem}>
+                    <Text style={styles.greekLabel}>Implied Vol</Text>
+                    <Text style={styles.greekVal}>{metrics.greeks.impliedVolEstimate}%</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Custom IV Override Input */}
+              {metrics?.greeks && (
+                <View style={styles.ivRow}>
+                  <Text style={styles.ivLabel}>Custom IV %:</Text>
+                  <TextInput
+                    style={styles.ivInput}
+                    value={customIv}
+                    onChangeText={setCustomIv}
+                    placeholder={`${metrics.greeks.impliedVolEstimate}%`}
+                    placeholderTextColor="#64748B"
+                    keyboardType="decimal-pad"
+                  />
+                  {customIv ? (
+                    <TouchableOpacity onPress={() => setCustomIv('')} style={styles.ivResetBtn}>
+                      <Text style={styles.ivResetText}>Reset</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              )}
+
+              {/* Payoff Chart */}
+              {metrics && (
+                <View style={{ marginTop: 12 }}>
+                  <PayoffChart
+                    stockPrice={parseFloat(stockPrice) || 0}
+                    strikePrice={parseFloat(strikePrice) || 0}
+                    premium={parseFloat(premium) || 0}
+                    contracts={parsedContracts}
+                  />
+                </View>
+              )}
+
+              {/* Manual Parameter Fine-Tuning Matrix */}
+              <View style={styles.manualInputsSection}>
+                <Text style={styles.manualInputsTitle}>Manual Trade Fine-Tuning</Text>
+                <View style={styles.formMatrix}>
+                  <View style={styles.mCol}>
+                    <Text style={styles.mLabel}>Stock ($)</Text>
+                    <TextInput style={styles.mInput} value={stockPrice} onChangeText={setStockPrice} keyboardType="decimal-pad" />
+                  </View>
+                  <View style={styles.mCol}>
+                    <Text style={styles.mLabel}>Strike ($)</Text>
+                    <TextInput style={styles.mInput} value={strikePrice} onChangeText={setStrikePrice} keyboardType="decimal-pad" />
+                  </View>
+                  <View style={styles.mCol}>
+                    <Text style={styles.mLabel}>Prem ($)</Text>
+                    <TextInput style={styles.mInput} value={premium} onChangeText={setPremium} keyboardType="decimal-pad" />
+                  </View>
+                  <View style={styles.mCol}>
+                    <Text style={styles.mLabel}>Cnts</Text>
+                    <TextInput style={styles.mInput} value={contracts} onChangeText={setContracts} keyboardType="number-pad" />
+                  </View>
+                  <View style={styles.mCol}>
+                    <Text style={styles.mLabel}>DTE</Text>
+                    <TextInput style={styles.mInput} value={dte} onChangeText={handleDteChange} keyboardType="number-pad" />
+                  </View>
+                </View>
+                <View style={styles.helperBar}>
+                  <Text style={styles.helperBarText}>
+                    Total Net Premium Collected: <Text style={{ color: '#10B981', fontWeight: '800' }}>+${totalCashCollected.toFixed(2)}</Text> ({parsedContracts * 100} shares locked)
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -890,13 +903,175 @@ const styles = StyleSheet.create({
     padding: 14,
     paddingBottom: 32,
   },
+  searchCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
   scoreCard: {
     backgroundColor: '#161E2E',
     borderRadius: 14,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#1E293B',
+  },
+  scoreHeroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  scoreGaugeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 96,
+    marginRight: 14,
+  },
+  scoreRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 3.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0B0F19',
+    marginBottom: 6,
+  },
+  scoreRingNumber: {
+    fontSize: 21,
+    fontWeight: '900',
+    lineHeight: 24,
+  },
+  scoreRingDenominator: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+    marginTop: -2,
+  },
+  scorePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    maxWidth: 96,
+  },
+  scorePillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  heroMetricsCol: {
+    flex: 1,
+  },
+  heroMetricItem: {
+    marginBottom: 4,
+  },
+  heroMetricLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  heroMetricCash: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#10B981',
+    letterSpacing: -0.5,
+  },
+  heroMetricSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  heroMetricDivider: {
+    height: 1,
+    backgroundColor: '#1E293B',
+    marginVertical: 6,
+  },
+  heroRowBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroMetricLabelSmall: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 1,
+  },
+  heroMetricValSmall: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  heroMetricValSuccess: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#10B981',
+  },
+  heroMetricSubSmall: {
+    fontSize: 9.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  advancedDrawerCard: {
+    backgroundColor: '#161E2E',
+    borderRadius: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    overflow: 'hidden',
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 13,
+  },
+  drawerTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  drawerSummaryText: {
+    fontSize: 10.5,
+    color: '#60A5FA',
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  drawerChevronBox: {
+    padding: 4,
+    backgroundColor: '#0F172A',
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  drawerContent: {
+    paddingHorizontal: 13,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+  },
+  manualInputsSection: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+  },
+  manualInputsTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   scoreHeader: {
     flexDirection: 'row',
