@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RefreshCw, ArrowRight, DollarSign, Crown, Info, CheckCircle2, X } from 'lucide-react-native';
+import { RefreshCw, ArrowRight, DollarSign, Crown, Info, CheckCircle2, X, Sparkles } from 'lucide-react-native';
 import { calculateRollCSP, RollSimulationResult } from '../services/cspMath';
+import { getPutOptionChain } from '../services/publicApi';
 
 interface RollSimulatorProps {
   initialData?: any;
@@ -38,20 +40,48 @@ export default function RollSimulator({
   const [newDte, setNewDte] = useState('30');
 
   const [rollResult, setRollResult] = useState<RollSimulationResult | null>(null);
+  const [fetchingLiveQuote, setFetchingLiveQuote] = useState(false);
+  const [isLiveQuoteActive, setIsLiveQuoteActive] = useState(false);
+
+  // Sync real-time option market premium from options API
+  const syncLiveOptionPremium = async (targetStrike: number, targetDte: number) => {
+    if (!initialData?.ticker) return;
+    try {
+      setFetchingLiveQuote(true);
+      const stockNum = initialData.stockPrice || targetStrike;
+      const chain = await getPutOptionChain(initialData.ticker, stockNum, targetDte);
+      if (chain && chain.length > 0) {
+        const matched = chain.reduce((prev, curr) =>
+          Math.abs(curr.strike - targetStrike) < Math.abs(prev.strike - targetStrike) ? curr : prev
+        );
+        if (matched && matched.premium > 0) {
+          setNewPremium(matched.premium.toFixed(2));
+          setIsLiveQuoteActive(!matched.isMocked);
+          return;
+        }
+      }
+    } catch (e) {
+      // Fallback preserves current or estimated premium
+    } finally {
+      setFetchingLiveQuote(false);
+    }
+  };
 
   // Sync state when initialData changes (e.g. user selects a different trade in Portfolio)
   useEffect(() => {
     if (initialData) {
-      if (initialData.strikePrice) {
-        setCurrentStrike(initialData.strikePrice.toString());
-        setNewStrike((initialData.strikePrice - 5).toString());
-      }
-      if (initialData.contracts) {
-        setCurrentContracts(initialData.contracts.toString());
-      }
-      if (initialData.premium) {
-        // reasonable default buyback estimate is ~1.2x initial premium or 4.50
-        setCloseCost((initialData.premium * 1.2).toFixed(2));
+      const initStrike = initialData.strikePrice ? parseFloat(initialData.strikePrice) : 140;
+      const initContracts = initialData.contracts ? parseInt(initialData.contracts, 10) : 1;
+      const initPrem = initialData.premium ? parseFloat(initialData.premium) : 3.8;
+      const rolledStrike = Math.max(1, initStrike - 5);
+
+      setCurrentStrike(initStrike.toFixed(2));
+      setNewStrike(rolledStrike.toFixed(2));
+      setCurrentContracts(initContracts.toString());
+      setCloseCost((initPrem * 1.2).toFixed(2));
+
+      if (initialData.ticker) {
+        syncLiveOptionPremium(rolledStrike, 30);
       }
     }
   }, [initialData]);
@@ -232,11 +262,23 @@ export default function RollSimulator({
             placeholderTextColor="#64748B"
           />
 
-          <Text style={styles.inputLabel}>New Premium ($/sh)</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text style={styles.inputLabel}>New Premium ($/sh)</Text>
+            {fetchingLiveQuote ? (
+              <ActivityIndicator size="small" color="#10B981" />
+            ) : isLiveQuoteActive ? (
+              <View style={styles.liveBadgeMini}>
+                <Text style={styles.liveBadgeMiniText}>LIVE QUOTE</Text>
+              </View>
+            ) : null}
+          </View>
           <TextInput
             style={styles.numInput}
             value={newPremium}
-            onChangeText={setNewPremium}
+            onChangeText={(val) => {
+              setNewPremium(val);
+              setIsLiveQuoteActive(false);
+            }}
             keyboardType="decimal-pad"
             placeholder="0.00"
             placeholderTextColor="#64748B"
@@ -262,7 +304,14 @@ export default function RollSimulator({
             style={[styles.presetBtn, styles.presetBtnStrike]}
             onPress={() => {
               const curr = parseFloat(currentStrike) || 100;
+              const dteNum = parseInt(newDte, 10) || 30;
               setNewStrike(curr.toFixed(2));
+              if (initialData?.ticker) {
+                syncLiveOptionPremium(curr, dteNum);
+              } else {
+                const basePrem = parseFloat(initialData?.premium || '3.50');
+                setNewPremium((basePrem * 1.15).toFixed(2));
+              }
             }}
             activeOpacity={0.8}
           >
@@ -274,7 +323,14 @@ export default function RollSimulator({
             onPress={() => {
               const curr = parseFloat(currentStrike) || 100;
               const rolledDown = Math.max(1, curr * 0.95);
+              const dteNum = parseInt(newDte, 10) || 30;
               setNewStrike(rolledDown.toFixed(2));
+              if (initialData?.ticker) {
+                syncLiveOptionPremium(rolledDown, dteNum);
+              } else {
+                const basePrem = parseFloat(initialData?.premium || '3.50');
+                setNewPremium((basePrem * 0.92).toFixed(2));
+              }
             }}
             activeOpacity={0.8}
           >
@@ -285,7 +341,15 @@ export default function RollSimulator({
             style={styles.presetBtn}
             onPress={() => {
               const baseDte = parseInt(newDte, 10) || 30;
-              setNewDte((baseDte + 7).toString());
+              const updatedDte = baseDte + 7;
+              setNewDte(updatedDte.toString());
+              const strikeNum = parseFloat(newStrike) || parseFloat(currentStrike) || 100;
+              if (initialData?.ticker) {
+                syncLiveOptionPremium(strikeNum, updatedDte);
+              } else {
+                const currPrem = parseFloat(newPremium) || 3.50;
+                setNewPremium((currPrem * 1.08).toFixed(2));
+              }
             }}
             activeOpacity={0.8}
           >
@@ -296,7 +360,15 @@ export default function RollSimulator({
             style={styles.presetBtn}
             onPress={() => {
               const baseDte = parseInt(newDte, 10) || 30;
-              setNewDte((baseDte + 14).toString());
+              const updatedDte = baseDte + 14;
+              setNewDte(updatedDte.toString());
+              const strikeNum = parseFloat(newStrike) || parseFloat(currentStrike) || 100;
+              if (initialData?.ticker) {
+                syncLiveOptionPremium(strikeNum, updatedDte);
+              } else {
+                const currPrem = parseFloat(newPremium) || 3.50;
+                setNewPremium((currPrem * 1.16).toFixed(2));
+              }
             }}
             activeOpacity={0.8}
           >
@@ -307,7 +379,15 @@ export default function RollSimulator({
             style={styles.presetBtn}
             onPress={() => {
               const baseDte = parseInt(newDte, 10) || 30;
-              setNewDte((baseDte + 30).toString());
+              const updatedDte = baseDte + 30;
+              setNewDte(updatedDte.toString());
+              const strikeNum = parseFloat(newStrike) || parseFloat(currentStrike) || 100;
+              if (initialData?.ticker) {
+                syncLiveOptionPremium(strikeNum, updatedDte);
+              } else {
+                const currPrem = parseFloat(newPremium) || 3.50;
+                setNewPremium((currPrem * 1.32).toFixed(2));
+              }
             }}
             activeOpacity={0.8}
           >
@@ -319,20 +399,51 @@ export default function RollSimulator({
       {/* Simulation Outcome Cards */}
       {rollResult && (
         <View style={styles.outcomeCard}>
-          <Text style={styles.outcomeTitle}>Roll Transaction Outcome</Text>
+          <View style={styles.outcomeHeaderRow}>
+            <Text style={styles.outcomeTitle}>Roll Transaction Outcome</Text>
+            {isLiveQuoteActive && (
+              <View style={styles.liveQuoteTag}>
+                <Text style={styles.liveQuoteTagText}>LIVE QUOTE</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Plain-English Concept Explanation */}
+          <View style={styles.summaryCallout}>
+            <CheckCircle2 size={15} color={rollResult.isNetCredit ? '#10B981' : '#F59E0B'} style={{ marginRight: 8, marginTop: 2 }} />
+            <Text style={styles.summaryCalloutText}>
+              {rollResult.isNetCredit
+                ? `You buy back your current put, sell a new put at $${(parseFloat(newStrike) || 0).toFixed(2)} strike, pocket +$${rollResult.netCreditOrDebit.toFixed(2)} net cash today, and lower your breakeven purchase price to $${rollResult.newEffectiveCostBasis.toFixed(2)}/share.`
+                : `You buy back your current put and sell a new put at $${(parseFloat(newStrike) || 0).toFixed(2)} strike with a -$${Math.abs(rollResult.netCreditOrDebit).toFixed(2)} out-of-pocket net debit to reset your expiration.`
+              }
+            </Text>
+          </View>
           
           <View style={styles.outcomeRow}>
-            <Text style={styles.outcomeLabel}>Close Buyback Debit:</Text>
+            <View>
+              <Text style={styles.outcomeLabel}>Cost to Buy Back Existing Put:</Text>
+              <Text style={styles.outcomeHelper}>Money paid to cancel current obligation</Text>
+            </View>
             <Text style={styles.textDanger}>-${rollResult.closeDebitTotal.toFixed(2)}</Text>
           </View>
 
           <View style={styles.outcomeRow}>
-            <Text style={styles.outcomeLabel}>New Premium Credit:</Text>
+            <View>
+              <Text style={styles.outcomeLabel}>Cash Collected from New Put:</Text>
+              <Text style={styles.outcomeHelper}>Fresh premium received from new expiration</Text>
+            </View>
             <Text style={styles.textSuccess}>+${rollResult.newCreditTotal.toFixed(2)}</Text>
           </View>
 
           <View style={[styles.outcomeRow, styles.outcomeHighlightRow]}>
-            <Text style={styles.outcomeHighlightLabel}>Net Credit / Debit:</Text>
+            <View>
+              <Text style={styles.outcomeHighlightLabel}>
+                {rollResult.isNetCredit ? 'Net Cash Pocketed Today:' : 'Net Out-of-Pocket Debit:'}
+              </Text>
+              <Text style={styles.outcomeHighlightHelper}>
+                {rollResult.isNetCredit ? 'Direct cash profit from this roll' : 'Total cash required to execute roll'}
+              </Text>
+            </View>
             <Text style={[styles.outcomeHighlightVal, rollResult.isNetCredit ? styles.textSuccess : styles.textDanger]}>
               {rollResult.isNetCredit ? '+' : ''}${rollResult.netCreditOrDebit.toFixed(2)}
             </Text>
@@ -341,12 +452,18 @@ export default function RollSimulator({
           <View style={styles.divider} />
 
           <View style={styles.outcomeRow}>
-            <Text style={styles.outcomeLabel}>New Collateral Required:</Text>
+            <View>
+              <Text style={styles.outcomeLabel}>New Cash Collateral Required:</Text>
+              <Text style={styles.outcomeHelper}>100% secured cash held for new strike</Text>
+            </View>
             <Text style={styles.textPrimary}>${rollResult.newCollateralRequired.toLocaleString()}</Text>
           </View>
 
           <View style={styles.outcomeRow}>
-            <Text style={styles.outcomeLabel}>Collateral Impact:</Text>
+            <View>
+              <Text style={styles.outcomeLabel}>Collateral Impact:</Text>
+              <Text style={styles.outcomeHelper}>Difference vs current locked funds</Text>
+            </View>
             <Text
               style={
                 rollResult.collateralDifference < 0
@@ -365,8 +482,11 @@ export default function RollSimulator({
           </View>
 
           <View style={styles.outcomeRow}>
-            <Text style={styles.outcomeLabel}>New Effective Cost Basis:</Text>
-            <Text style={styles.textSuccess}>${rollResult.newEffectiveCostBasis.toFixed(2)}/share</Text>
+            <View>
+              <Text style={styles.outcomeLabel}>New Breakeven Purchase Price:</Text>
+              <Text style={styles.outcomeHelper}>Actual cost/share if assigned after all credits</Text>
+            </View>
+            <Text style={styles.textSuccess}>${rollResult.newEffectiveCostBasis.toFixed(2)}/sh</Text>
           </View>
 
           {initialData?.id ? (
@@ -501,16 +621,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#F8FAFC',
-    marginBottom: 14,
+  },
+  outcomeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  liveQuoteTag: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  liveQuoteTagText: {
+    color: '#10B981',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  liveBadgeMini: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  liveBadgeMiniText: {
+    color: '#10B981',
+    fontSize: 8.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  summaryCallout: {
+    flexDirection: 'row',
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  summaryCalloutText: {
+    flex: 1,
+    color: '#E2E8F0',
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: '500',
   },
   outcomeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 6,
   },
   outcomeLabel: {
-    fontSize: 13,
-    color: '#94A3B8',
+    fontSize: 12.5,
+    color: '#E2E8F0',
+    fontWeight: '600',
+  },
+  outcomeHelper: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
   },
   outcomeHighlightRow: {
     backgroundColor: '#0B0F19',
@@ -519,9 +695,14 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   outcomeHighlightLabel: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#F8FAFC',
+  },
+  outcomeHighlightHelper: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 1,
   },
   outcomeHighlightVal: {
     fontSize: 16,
