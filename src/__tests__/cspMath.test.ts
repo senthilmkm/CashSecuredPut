@@ -116,6 +116,7 @@ export function runCSPMathTests() {
   assert(rollRes.newCreditTotal === 750, 'New Credit = $750');
   assert(rollRes.netCreditOrDebit === 250, 'Net Credit = $250');
   assert(rollRes.isNetCredit === true, 'Roll is Net Credit');
+  assert(rollRes.collateralDifference === -500, 'Collateral difference released = -$500');
 
   // Test 5b: Roll with Initial Leg Premium (Cumulative Cost Basis)
   const rollWithInitial = calculateRollCSP({
@@ -128,6 +129,20 @@ export function runCSPMathTests() {
   });
   assert(rollWithInitial.netCreditOrDebit === 170, 'Net credit for roll with initial = $170');
   assert(rollWithInitial.newEffectiveCostBasis === 128.30, 'Cumulative cost basis incorporates initial premium = $128.30');
+
+  // Test 5c: Roll with Net Debit (Paying more to close than received on roll)
+  const rollDebitRes = calculateRollCSP({
+    currentStrike: 140,
+    currentContracts: 2,
+    closeCostPerContract: 6.00,
+    newStrike: 130,
+    newPremiumPerContract: 4.00,
+  });
+  assert(rollDebitRes.closeDebitTotal === 1200, 'Close Debit for 2 contracts = $1,200');
+  assert(rollDebitRes.newCreditTotal === 800, 'New Credit for 2 contracts = $800');
+  assert(rollDebitRes.netCreditOrDebit === -400, 'Net debit on roll = -$400');
+  assert(rollDebitRes.isNetCredit === false, 'Roll is Net Debit');
+  assert(rollDebitRes.collateralDifference === -2000, 'Collateral difference for 2 contracts rolled 140->130 = -$2,000');
 
   // Test 6: Theta Decay Series
   const decaySeries = calculateCSPTimeDecay({ premium: 5.00, dte: 30 });

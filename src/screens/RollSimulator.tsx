@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { RefreshCw, ArrowRight, DollarSign, Crown, Info, CheckCircle2 } from 'lucide-react-native';
+import { RefreshCw, ArrowRight, DollarSign, Crown, Info, CheckCircle2, X } from 'lucide-react-native';
 import { calculateRollCSP, RollSimulationResult } from '../services/cspMath';
 
 interface RollSimulatorProps {
@@ -17,6 +17,8 @@ interface RollSimulatorProps {
   onExecuteRoll?: (originalTradeId: string, rollDetails: any) => Promise<{ success: boolean; paywallTriggered?: boolean }>;
   onOpenPaywall: () => void;
   isPremium: boolean;
+  onDismissActiveTrade?: () => void;
+  onRollSuccess?: () => void;
 }
 
 export default function RollSimulator({
@@ -24,6 +26,8 @@ export default function RollSimulator({
   onExecuteRoll,
   onOpenPaywall,
   isPremium,
+  onDismissActiveTrade,
+  onRollSuccess,
 }: RollSimulatorProps) {
   const [currentStrike, setCurrentStrike] = useState(initialData?.strikePrice ? initialData.strikePrice.toString() : '140.00');
   const [currentContracts, setCurrentContracts] = useState(initialData?.contracts ? initialData.contracts.toString() : '1');
@@ -53,7 +57,7 @@ export default function RollSimulator({
   }, [initialData]);
 
   useEffect(() => {
-    const originalPrem = initialData?.cumulativePremium || initialData?.premium || 0;
+    const originalPrem = initialData?.cumulativeCostBasisCredit || initialData?.cumulativePremium || initialData?.premium || 0;
     const res = calculateRollCSP({
       currentStrike: parseFloat(currentStrike) || 0,
       currentContracts: parseInt(currentContracts, 10) || 1,
@@ -76,20 +80,61 @@ export default function RollSimulator({
       return;
     }
 
-    const newExpirationDate = new Date(Date.now() + (parseInt(newDte, 10) || 30) * 86400000).toISOString().split('T')[0];
+    const parsedNewStrike = parseFloat(newStrike);
+    const parsedNewPremium = parseFloat(newPremium);
+    const parsedCloseDebit = parseFloat(closeCost);
+    const parsedDte = parseInt(newDte, 10);
+
+    if (isNaN(parsedNewStrike) || parsedNewStrike <= 0) {
+      Alert.alert('Invalid Strike', 'Please enter a valid positive new strike price.');
+      return;
+    }
+    if (isNaN(parsedNewPremium) || parsedNewPremium <= 0) {
+      Alert.alert('Invalid Premium', 'Please enter a valid positive new option premium.');
+      return;
+    }
+    if (isNaN(parsedCloseDebit) || parsedCloseDebit < 0) {
+      Alert.alert('Invalid Debit', 'Please enter a valid buyback debit cost.');
+      return;
+    }
+    if (isNaN(parsedDte) || parsedDte <= 0) {
+      Alert.alert('Invalid DTE', 'Please enter valid days to expiration (e.g. 30).');
+      return;
+    }
+
+    const newExpirationDate = new Date(Date.now() + parsedDte * 86400000).toISOString().split('T')[0];
 
     const res = await onExecuteRoll(initialData.id, {
-      newStrike: parseFloat(newStrike),
-      newPremium: parseFloat(newPremium),
+      newStrike: parsedNewStrike,
+      newPremium: parsedNewPremium,
       newExpirationDate,
-      newDte: parseInt(newDte, 10),
-      closeDebitPerShare: parseFloat(closeCost),
+      newDte: parsedDte,
+      closeDebitPerShare: parsedCloseDebit,
     });
 
     if (res.paywallTriggered) {
       onOpenPaywall();
     } else if (res.success) {
-      Alert.alert('Roll Executed!', 'Your CSP trade has been rolled down and out successfully.');
+      Alert.alert(
+        'Roll Executed!',
+        `Your ${initialData.ticker || ''} CSP position was successfully rolled down and out to $${parsedNewStrike.toFixed(2)} Strike.`,
+        [
+          {
+            text: 'View in Portfolio',
+            onPress: () => {
+              if (onRollSuccess) onRollSuccess();
+            },
+          },
+          {
+            text: 'OK',
+            onPress: () => {
+              if (onRollSuccess) onRollSuccess();
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert('Roll Failed', 'Could not execute roll. The original trade may have already been closed.');
     }
   };
 
@@ -115,6 +160,16 @@ export default function RollSimulator({
               Initial Premium: +${(initialData.cumulativeCostBasisCredit || initialData.cumulativePremium || initialData.premium || 0).toFixed(2)}/sh • {initialData.contracts} Contract{initialData.contracts > 1 ? 's' : ''}
             </Text>
           </View>
+          {onDismissActiveTrade && (
+            <TouchableOpacity
+              style={styles.dismissBtn}
+              onPress={onDismissActiveTrade}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <X size={16} color="#A7F3D0" />
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -137,7 +192,9 @@ export default function RollSimulator({
             style={styles.numInput}
             value={currentStrike}
             onChangeText={setCurrentStrike}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor="#64748B"
           />
 
           <Text style={styles.inputLabel}>Contracts</Text>
@@ -146,6 +203,8 @@ export default function RollSimulator({
             value={currentContracts}
             onChangeText={setCurrentContracts}
             keyboardType="number-pad"
+            placeholder="1"
+            placeholderTextColor="#64748B"
           />
 
           <Text style={styles.inputLabel}>Buyback Cost ($/sh)</Text>
@@ -153,7 +212,9 @@ export default function RollSimulator({
             style={styles.numInput}
             value={closeCost}
             onChangeText={setCloseCost}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor="#64748B"
           />
         </View>
 
@@ -166,7 +227,9 @@ export default function RollSimulator({
             style={styles.numInput}
             value={newStrike}
             onChangeText={setNewStrike}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor="#64748B"
           />
 
           <Text style={styles.inputLabel}>New Premium ($/sh)</Text>
@@ -174,7 +237,9 @@ export default function RollSimulator({
             style={styles.numInput}
             value={newPremium}
             onChangeText={setNewPremium}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor="#64748B"
           />
 
           <Text style={styles.inputLabel}>New DTE (Days)</Text>
@@ -183,45 +248,25 @@ export default function RollSimulator({
             value={newDte}
             onChangeText={setNewDte}
             keyboardType="number-pad"
+            placeholder="30"
+            placeholderTextColor="#64748B"
           />
         </View>
       </View>
 
       {/* 1-Tap Roll Presets Bar to reduce user friction */}
       <View style={styles.presetsCard}>
-        <Text style={styles.presetsTitle}>Quick Roll Presets</Text>
+        <Text style={styles.presetsTitle}>Quick Roll Adjustments</Text>
         <View style={styles.presetsRow}>
           <TouchableOpacity
-            style={styles.presetBtn}
+            style={[styles.presetBtn, styles.presetBtnStrike]}
             onPress={() => {
-              const baseDte = parseInt(newDte, 10) || 30;
-              setNewDte((baseDte + 7).toString());
+              const curr = parseFloat(currentStrike) || 100;
+              setNewStrike(curr.toFixed(2));
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.presetBtnText}>+7 Days</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.presetBtn}
-            onPress={() => {
-              const baseDte = parseInt(newDte, 10) || 30;
-              setNewDte((baseDte + 14).toString());
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.presetBtnText}>+14 Days</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.presetBtn}
-            onPress={() => {
-              const baseDte = parseInt(newDte, 10) || 30;
-              setNewDte((baseDte + 30).toString());
-            }}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.presetBtnText}>+30 Days</Text>
+            <Text style={styles.presetBtnTextStrike}>Same Strike</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -234,6 +279,39 @@ export default function RollSimulator({
             activeOpacity={0.8}
           >
             <Text style={styles.presetBtnTextStrike}>-5% Strike</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.presetBtn}
+            onPress={() => {
+              const baseDte = parseInt(newDte, 10) || 30;
+              setNewDte((baseDte + 7).toString());
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnText}>+7d</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.presetBtn}
+            onPress={() => {
+              const baseDte = parseInt(newDte, 10) || 30;
+              setNewDte((baseDte + 14).toString());
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnText}>+14d</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.presetBtn}
+            onPress={() => {
+              const baseDte = parseInt(newDte, 10) || 30;
+              setNewDte((baseDte + 30).toString());
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.presetBtnText}>+30d</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -268,16 +346,42 @@ export default function RollSimulator({
           </View>
 
           <View style={styles.outcomeRow}>
+            <Text style={styles.outcomeLabel}>Collateral Impact:</Text>
+            <Text
+              style={
+                rollResult.collateralDifference < 0
+                  ? styles.textSuccess
+                  : rollResult.collateralDifference > 0
+                  ? styles.textWarning
+                  : styles.textSubtle
+              }
+            >
+              {rollResult.collateralDifference < 0
+                ? `-$${Math.abs(rollResult.collateralDifference).toLocaleString()} (Freed Up)`
+                : rollResult.collateralDifference > 0
+                ? `+$${rollResult.collateralDifference.toLocaleString()} (Additional)`
+                : '$0 (No Change)'}
+            </Text>
+          </View>
+
+          <View style={styles.outcomeRow}>
             <Text style={styles.outcomeLabel}>New Effective Cost Basis:</Text>
             <Text style={styles.textSuccess}>${rollResult.newEffectiveCostBasis.toFixed(2)}/share</Text>
           </View>
 
-          {initialData?.id && (
+          {initialData?.id ? (
             <TouchableOpacity style={styles.applyBtn} onPress={handleApplyRoll} activeOpacity={0.85}>
               <LinearGradient colors={['#3B82F6', '#1D4ED8']} style={styles.applyGradient}>
                 <Text style={styles.applyBtnText}>Execute Roll Transaction</Text>
               </LinearGradient>
             </TouchableOpacity>
+          ) : (
+            <View style={styles.standaloneNotice}>
+              <Info size={14} color="#60A5FA" style={{ marginRight: 6 }} />
+              <Text style={styles.standaloneNoticeText}>
+                Simulation mode. To roll an active portfolio position, tap the 🔄 icon on any trade card in Portfolio.
+              </Text>
+            </View>
           )}
         </View>
       )}
@@ -314,6 +418,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   activeTradeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#0F291E',
     borderWidth: 1,
     borderColor: '#10B981',
@@ -491,5 +598,34 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontSize: 11.5,
     fontWeight: '700',
+  },
+  textWarning: {
+    color: '#F59E0B',
+    fontWeight: '700',
+  },
+  textSubtle: {
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  dismissBtn: {
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  standaloneNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#1E3A8A',
+  },
+  standaloneNoticeText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#93C5FD',
+    lineHeight: 16,
   },
 });

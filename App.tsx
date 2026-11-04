@@ -235,6 +235,11 @@ export default function App() {
             onExecuteRoll={executeRoll}
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
+            onDismissActiveTrade={() => setActiveRollData(null)}
+            onRollSuccess={() => {
+              setActiveRollData(null);
+              setCurrentTab('portfolio');
+            }}
           />
         )}
 
