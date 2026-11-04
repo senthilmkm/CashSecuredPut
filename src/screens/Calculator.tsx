@@ -67,6 +67,15 @@ export default function Calculator({
   const isMountedRef = useRef(true);
   const dteTimeoutRef = useRef<any>(null);
 
+  // Auto-scroll refs & layout measurements for Live Options Chain & Expiration Filters
+  const expPillsScrollRef = useRef<ScrollView>(null);
+  const expPillsContainerWidthRef = useRef<number>(350);
+  const expPillLayoutsRef = useRef<{ [key: string]: { x: number; width: number } }>({});
+
+  const chainScrollRef = useRef<ScrollView>(null);
+  const chainContainerHeightRef = useRef<number>(220);
+  const chainRowLayoutsRef = useRef<{ [key: string]: { y: number; height: number } }>({});
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -75,6 +84,32 @@ export default function Calculator({
     };
   }, []);
 
+  // Smoothly center the active expiration date filter pill in front of user's eyes
+  const scrollToExpPill = (expKey: string) => {
+    requestAnimationFrame(() => {
+      const layout = expPillLayoutsRef.current[expKey];
+      if (layout && expPillsScrollRef.current) {
+        const containerWidth = expPillsContainerWidthRef.current || 350;
+        const targetX = Math.max(0, layout.x - (containerWidth / 2) + (layout.width / 2));
+        expPillsScrollRef.current.scrollTo({ x: targetX, animated: true });
+      }
+    });
+  };
+
+  // Smoothly center the active put contract row in the options chain table
+  const scrollToSelectedRow = (rowKey?: string) => {
+    requestAnimationFrame(() => {
+      const key = rowKey || (selectedContract ? `${selectedContract.strike}_${selectedContract.expiration}` : undefined);
+      if (!key) return;
+      const layout = chainRowLayoutsRef.current[key];
+      if (layout && chainScrollRef.current) {
+        const containerHeight = chainContainerHeightRef.current || 220;
+        const targetY = Math.max(0, layout.y - (containerHeight / 2) + (layout.height / 2));
+        chainScrollRef.current.scrollTo({ y: targetY, animated: true });
+      }
+    });
+  };
+
   // Extract unique sorted expiration dates
   const uniqueExpirations = useMemo(() => {
     return Array.from(new Set(optionChain.map((c) => c.expiration))).sort();
@@ -82,9 +117,34 @@ export default function Calculator({
 
   // Filter option chain by selected expiration date
   const displayedContracts = useMemo(() => {
+    // Clear layout cache when contracts change so new positions are cleanly measured
+    chainRowLayoutsRef.current = {};
     if (selectedExpFilter === 'all') return optionChain;
     return optionChain.filter((c) => c.expiration === selectedExpFilter);
   }, [optionChain, selectedExpFilter]);
+
+  // Auto-center the selected date filter pill whenever selectedExpFilter or uniqueExpirations update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollToExpPill(selectedExpFilter);
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [selectedExpFilter, uniqueExpirations]);
+
+  // Auto-center the selected row in options chain whenever selectedContract, strike, or displayed contracts update
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (selectedContract) {
+        scrollToSelectedRow(`${selectedContract.strike}_${selectedContract.expiration}`);
+      } else if (strikePrice && displayedContracts.length > 0) {
+        const matched = displayedContracts.find((c) => c.strike.toFixed(2) === strikePrice);
+        if (matched) {
+          scrollToSelectedRow(`${matched.strike}_${matched.expiration}`);
+        }
+      }
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [selectedContract, strikePrice, displayedContracts]);
 
   const handleSelectExpFilter = (exp: string) => {
     setSelectedExpFilter(exp);
@@ -92,6 +152,24 @@ export default function Calculator({
       const expTime = new Date(exp + 'T16:00:00Z').getTime();
       const days = Math.max(1, Math.round((expTime - Date.now()) / (1000 * 60 * 60 * 24)));
       setDte(days.toString());
+
+      // Auto-select nearest 95% target strike within newly selected expiration
+      const targetExpContracts = optionChain.filter((c) => c.expiration === exp);
+      if (targetExpContracts.length > 0) {
+        const sPrice = parseFloat(stockPrice) || 0;
+        const targetStrike = sPrice > 0 ? Math.round(sPrice * 0.95) : 0;
+        const nearest = targetExpContracts.reduce((prev, curr) =>
+          Math.abs(curr.strike - targetStrike) < Math.abs(prev.strike - targetStrike) ? curr : prev
+        );
+        if (nearest) {
+          setSelectedContract(nearest);
+          setStrikePrice(nearest.strike.toFixed(2));
+          setPremium(nearest.premium.toFixed(2));
+          if (typeof nearest.impliedVolatility === 'number' && nearest.impliedVolatility > 0) {
+            setCustomIv((nearest.impliedVolatility * 100).toFixed(1));
+          }
+        }
+      }
     }
   };
 
@@ -574,17 +652,17 @@ export default function Calculator({
           <View style={styles.formMatrix}>
             <View style={styles.mCol}>
               <Text style={styles.mLabel}>Stock ($)</Text>
-              <TextInput style={styles.mInput} value={stockPrice} onChangeText={setStockPrice} keyboardType="numeric" />
+              <TextInput style={styles.mInput} value={stockPrice} onChangeText={setStockPrice} keyboardType="decimal-pad" />
             </View>
 
             <View style={styles.mCol}>
               <Text style={styles.mLabel}>Strike ($)</Text>
-              <TextInput style={styles.mInput} value={strikePrice} onChangeText={setStrikePrice} keyboardType="numeric" />
+              <TextInput style={styles.mInput} value={strikePrice} onChangeText={setStrikePrice} keyboardType="decimal-pad" />
             </View>
 
             <View style={styles.mCol}>
               <Text style={styles.mLabel}>Prem ($)</Text>
-              <TextInput style={styles.mInput} value={premium} onChangeText={setPremium} keyboardType="numeric" />
+              <TextInput style={styles.mInput} value={premium} onChangeText={setPremium} keyboardType="decimal-pad" />
             </View>
 
             <View style={styles.mCol}>
@@ -654,14 +732,27 @@ export default function Calculator({
                 {/* Expiration Date Pill Filters */}
                 {uniqueExpirations.length > 1 && (
                   <ScrollView
+                    ref={expPillsScrollRef}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     style={styles.expPillsScroll}
                     contentContainerStyle={styles.expPillsContent}
+                    onLayout={(e) => {
+                      expPillsContainerWidthRef.current = e.nativeEvent.layout.width;
+                    }}
                   >
                     <TouchableOpacity
                       style={[styles.expPill, selectedExpFilter === 'all' && styles.expPillActive]}
                       onPress={() => handleSelectExpFilter('all')}
+                      onLayout={(e) => {
+                        expPillLayoutsRef.current['all'] = {
+                          x: e.nativeEvent.layout.x,
+                          width: e.nativeEvent.layout.width,
+                        };
+                        if (selectedExpFilter === 'all') {
+                          scrollToExpPill('all');
+                        }
+                      }}
                       activeOpacity={0.8}
                     >
                       <Text style={[styles.expPillText, selectedExpFilter === 'all' && styles.expPillTextActive]}>
@@ -677,6 +768,15 @@ export default function Calculator({
                           key={exp}
                           style={[styles.expPill, isSelected && styles.expPillActive]}
                           onPress={() => handleSelectExpFilter(exp)}
+                          onLayout={(e) => {
+                            expPillLayoutsRef.current[exp] = {
+                              x: e.nativeEvent.layout.x,
+                              width: e.nativeEvent.layout.width,
+                            };
+                            if (isSelected) {
+                              scrollToExpPill(exp);
+                            }
+                          }}
                           activeOpacity={0.8}
                         >
                           <Text style={[styles.expPillText, isSelected && styles.expPillTextActive]}>
@@ -694,22 +794,44 @@ export default function Calculator({
                     <Text style={[styles.chainColHeader, { flex: 1.1, textAlign: 'center' }]}>EXPIRATION</Text>
                     <Text style={[styles.chainColHeader, { flex: 1.4, textAlign: 'right' }]}>PREM / SHARE</Text>
                   </View>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  <ScrollView
+                    ref={chainScrollRef}
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={false}
+                    onLayout={(e) => {
+                      chainContainerHeightRef.current = e.nativeEvent.layout.height;
+                    }}
+                  >
                     {displayedContracts.map((contract: CSPOptionContract, idx: number) => {
                       const isSelected = selectedContract
                         ? (selectedContract.symbol === contract.symbol || (selectedContract.strike === contract.strike && selectedContract.expiration === contract.expiration))
                         : strikePrice === contract.strike.toFixed(2);
+                      const rowKey = `${contract.strike}_${contract.expiration}`;
                       return (
                         <TouchableOpacity
-                          key={contract.symbol || idx}
+                          key={contract.symbol || `${contract.strike}_${contract.expiration}_${idx}`}
                           style={[styles.chainRow, isSelected && styles.chainRowSelected]}
                           onPress={() => selectContractFromChain(contract)}
+                          onLayout={(e) => {
+                            chainRowLayoutsRef.current[rowKey] = {
+                              y: e.nativeEvent.layout.y,
+                              height: e.nativeEvent.layout.height,
+                            };
+                            if (isSelected) {
+                              scrollToSelectedRow(rowKey);
+                            }
+                          }}
                           activeOpacity={0.8}
                         >
-                          <Text style={styles.chainStrike}>${contract.strike.toFixed(2)} Put</Text>
-                          <Text style={styles.chainExp}>{contract.expiration}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1.1 }}>
+                            {isSelected && <View style={styles.selectedRowDot} />}
+                            <Text style={[styles.chainStrike, isSelected && styles.chainStrikeSelected]}>
+                              ${contract.strike.toFixed(2)} Put
+                            </Text>
+                          </View>
+                          <Text style={[styles.chainExp, isSelected && styles.chainExpSelected]}>{contract.expiration}</Text>
                           <View style={styles.chainPremCol}>
-                            <Text style={styles.chainPrem}>+${contract.premium.toFixed(2)}/sh</Text>
+                            <Text style={[styles.chainPrem, isSelected && styles.chainPremSelected]}>+${contract.premium.toFixed(2)}/sh</Text>
                             <Text style={styles.chainPremTotal}>(${(contract.premium * 100).toFixed(0)}/cnt)</Text>
                           </View>
                         </TouchableOpacity>
@@ -972,6 +1094,14 @@ const styles = StyleSheet.create({
   chainRowSelected: {
     borderColor: '#10B981',
     backgroundColor: '#0F291E',
+    borderWidth: 1.5,
+  },
+  selectedRowDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+    marginRight: 6,
   },
   chainColHeaders: {
     flexDirection: 'row',
@@ -993,9 +1123,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  chainStrikeSelected: {
+    color: '#34D399',
+    fontWeight: '800',
+  },
   chainExp: {
     color: '#94A3B8',
     fontSize: 12,
+  },
+  chainExpSelected: {
+    color: '#E2E8F0',
+    fontWeight: '700',
   },
   chainPremCol: {
     alignItems: 'flex-end',
@@ -1004,6 +1142,10 @@ const styles = StyleSheet.create({
     color: '#10B981',
     fontSize: 13,
     fontWeight: '800',
+  },
+  chainPremSelected: {
+    color: '#34D399',
+    fontWeight: '900',
   },
   chainPremTotal: {
     color: '#34D399',
@@ -1043,6 +1185,7 @@ const styles = StyleSheet.create({
   expPillActive: {
     backgroundColor: '#0F291E',
     borderColor: '#10B981',
+    borderWidth: 1.5,
   },
   expPillText: {
     color: '#94A3B8',
