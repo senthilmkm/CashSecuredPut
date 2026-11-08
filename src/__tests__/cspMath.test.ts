@@ -1,7 +1,15 @@
 declare const process: any;
 import { calculateCSPMetrics, calculateRollCSP, calculateCSPTimeDecay } from '../services/cspMath';
-import { pruneHistoryByRetention, CSPTrade, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY } from '../services/storageUtils';
+import {
+  pruneHistoryByRetention,
+  CSPTrade,
+  FREE_TIER_MAX_TRADES,
+  FREE_TIER_MAX_HISTORY,
+  STORAGE_KEY_ONBOARDING,
+  shouldShowOnboarding,
+} from '../services/storageUtils';
 import { checkEarningsRisk } from '../services/earningsService';
+
 import { isCustomerEntitled } from '../services/entitlementUtils';
 import { groupTradesByMonth, calculateGoalPacing } from '../services/incomeAnalytics';
 import pricingConfig from '../constants/pricing.json';
@@ -497,7 +505,26 @@ export function runCSPMathTests() {
   assert(simulateWheelTransition(1, false).allowed === false, 'Free user blocked on 2nd Wheel position');
   assert(simulateWheelTransition(5, true).allowed === true, 'Pro user can manage unlimited Wheel positions');
 
+  // Test 24: Onboarding State Machine & Edge Cases
+  assert(STORAGE_KEY_ONBOARDING === '@csp_onboarding_completed_v1', 'Onboarding key matches v1 schema');
+  // Scenario A: Brand new installation with empty data
+  assert(shouldShowOnboarding(null, 0, 0) === true, 'Brand new user with zero trades shows onboarding');
+  // Scenario B: User explicitly completed onboarding
+  assert(shouldShowOnboarding('true', 0, 0) === false, 'Completed user never shows onboarding');
+  assert(shouldShowOnboarding('true', 5, 10) === false, 'Completed user with trades never shows onboarding');
+  // Scenario C: Existing active user updating app (zero friction, never ambushed)
+  assert(shouldShowOnboarding(null, 1, 0) === false, 'Existing user with 1 active trade automatically skips onboarding');
+  assert(shouldShowOnboarding(null, 3, 5) === false, 'Existing user with multiple trades automatically skips onboarding');
+  // Scenario D: Existing user with history only
+  assert(shouldShowOnboarding(null, 0, 1) === false, 'Existing user with history trades automatically skips onboarding');
+  // Scenario E: Edge cases (empty string or false string without trades)
+  assert(shouldShowOnboarding('false', 0, 0) === true, 'Reset or false flag with zero trades shows onboarding');
+  assert(shouldShowOnboarding('', 0, 0) === true, 'Empty string flag with zero trades shows onboarding');
+  // Scenario F: Reinstall scenario (empty storage)
+  assert(shouldShowOnboarding(null, 0, 0) === true, 'Fresh reinstall with empty storage shows onboarding cleanly');
+
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
+
   if (failed > 0) {
     process.exit(1);
   }

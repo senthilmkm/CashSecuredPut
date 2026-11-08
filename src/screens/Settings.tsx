@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   ShieldAlert,
+  Compass,
 } from 'lucide-react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -39,8 +40,10 @@ interface SettingsProps {
   history: CSPTrade[];
   onClearData: () => void;
   onOpenPaywall: () => void;
+  onReplayTour?: () => void;
   navigation?: any;
 }
+
 
 const FAQ_ITEMS = [
   {
@@ -71,7 +74,9 @@ export default function Settings({
   history,
   onClearData,
   onOpenPaywall,
+  onReplayTour,
 }: SettingsProps) {
+
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
 
   // Custom slider values for retention
@@ -400,7 +405,18 @@ export default function Settings({
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Support & Legal</Text>
 
+        {onReplayTour && (
+          <TouchableOpacity style={styles.linkRow} onPress={onReplayTour} activeOpacity={0.7}>
+            <View style={styles.linkLeft}>
+              <Compass size={18} color="#10B981" style={{ marginRight: 8 }} />
+              <Text style={styles.linkLabel}>App Tour & Strategy Walkthrough</Text>
+            </View>
+            <ArrowRight size={16} color="#4B5563" />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.linkRow} onPress={() => handleOpenLink('https://senthilmkm.github.io/CashSecuredPut/support.html')}>
+
           <View style={styles.linkLeft}>
             <HelpCircle size={18} color="#9CA3AF" style={{ marginRight: 8 }} />
             <Text style={styles.linkLabel}>Help & Support Center</Text>

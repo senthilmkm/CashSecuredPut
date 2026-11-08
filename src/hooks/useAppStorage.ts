@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPremiumStatus } from '../services/purchases';
-import { CSPTrade, pruneHistoryByRetention, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY } from '../services/storageUtils';
+import {
+  CSPTrade,
+  pruneHistoryByRetention,
+  FREE_TIER_MAX_TRADES,
+  FREE_TIER_MAX_HISTORY,
+  STORAGE_KEY_ONBOARDING,
+  shouldShowOnboarding,
+} from '../services/storageUtils';
 
 export { CSPTrade, pruneHistoryByRetention, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY };
 
@@ -13,6 +20,7 @@ const STORAGE_KEYS = {
   IS_PREMIUM: '@CashSecuredProfit:is_premium',
   FIRST_LAUNCH_DATE: '@CashSecuredProfit:first_launch_date',
   WHEEL: '@csp_wheel_positions_v1',
+  ONBOARDING: STORAGE_KEY_ONBOARDING,
 };
 
 export const TRIAL_DURATION_DAYS = 7;
@@ -26,18 +34,29 @@ export function useAppStorage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [retentionDays, setRetentionDays] = useState<number>(90);
   const [expirationAlertThreshold, setExpirationAlertThreshold] = useState<number>(3);
+  const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean>(true);
+
 
   // Load storage & evaluate 7-Day Free App Trial
   const loadStorage = useCallback(async () => {
     try {
       setLoading(true);
-      const [savedTrades, savedHistory, savedRetention, savedAlerts, premiumStatus, firstLaunch] = await Promise.all([
+      const [
+        savedTrades,
+        savedHistory,
+        savedRetention,
+        savedAlerts,
+        premiumStatus,
+        firstLaunch,
+        savedOnboarding,
+      ] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.TRADES),
         AsyncStorage.getItem(STORAGE_KEYS.HISTORY),
         AsyncStorage.getItem(STORAGE_KEYS.RETENTION_DAYS),
         AsyncStorage.getItem(STORAGE_KEYS.ALERT_THRESHOLD),
         checkPremiumStatus(),
         AsyncStorage.getItem(STORAGE_KEYS.FIRST_LAUNCH_DATE),
+        AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING),
       ]);
 
       setIsTrialActive(false);
@@ -51,21 +70,41 @@ export function useAppStorage() {
       if (savedAlerts) {
         setExpirationAlertThreshold(parseInt(savedAlerts, 10));
       }
+
+      let parsedTrades: CSPTrade[] = [];
       if (savedTrades) {
-        try { setTrades(JSON.parse(savedTrades)); } catch (e) { setTrades([]); }
+        try {
+          parsedTrades = JSON.parse(savedTrades);
+          setTrades(parsedTrades);
+        } catch (e) {
+          setTrades([]);
+        }
       }
+
+      let parsedHistory: CSPTrade[] = [];
       if (savedHistory) {
         try {
-          const parsed = JSON.parse(savedHistory);
-          const pruned = pruneHistoryByRetention(parsed, effectiveRetention);
+          const rawHistory = JSON.parse(savedHistory);
+          const pruned = pruneHistoryByRetention(rawHistory, effectiveRetention);
+          parsedHistory = pruned;
           setHistory(pruned);
-          if (pruned.length !== parsed.length) {
+          if (pruned.length !== rawHistory.length) {
             await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(pruned));
           }
         } catch (e) {
           setHistory([]);
         }
       }
+
+      // Evaluate onboarding status using pure helper
+      const shouldShow = shouldShowOnboarding(savedOnboarding, parsedTrades.length, parsedHistory.length);
+      setHasCompletedOnboarding(!shouldShow);
+
+      // Auto-migrate existing active users so they are never ambushed on future launches
+      if (!shouldShow && savedOnboarding !== 'true') {
+        AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING, 'true').catch(() => {});
+      }
+
       setIsPremium(premiumStatus);
     } catch (error) {
       console.error('[useAppStorage] Error loading storage:', error);
@@ -73,6 +112,7 @@ export function useAppStorage() {
       setLoading(false);
     }
   }, []);
+
 
   useEffect(() => {
     loadStorage();
@@ -223,6 +263,15 @@ export function useAppStorage() {
     ]);
   };
 
+  const completeOnboarding = useCallback(async () => {
+    setHasCompletedOnboarding(true);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING, 'true');
+    } catch (e) {
+      console.warn('[useAppStorage] Error saving onboarding state:', e);
+    }
+  }, []);
+
   return {
     trades,
     history,
@@ -231,6 +280,8 @@ export function useAppStorage() {
     trialDaysRemaining,
     hasProAccess,
     loading,
+    hasCompletedOnboarding,
+    completeOnboarding,
     retentionDays,
     expirationAlertThreshold,
     addTrade,
@@ -242,4 +293,5 @@ export function useAppStorage() {
     updateExpirationAlertThreshold,
     clearAllData,
   };
+
 }

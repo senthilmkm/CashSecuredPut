@@ -23,6 +23,7 @@ import WheelHub from './src/screens/WheelHub';
 import GuideCenter from './src/screens/GuideCenter';
 import Settings from './src/screens/Settings';
 import Subscription from './src/screens/Subscription';
+import Onboarding from './src/screens/Onboarding';
 
 // Silence foreground notifications while using app
 Notifications.setNotificationHandler({
@@ -37,6 +38,7 @@ Notifications.setNotificationHandler({
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'analyzer' | 'wheel' | 'portfolio' | 'guides' | 'roll' | 'settings'>('analyzer');
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
+  const [showReplayTour, setShowReplayTour] = useState<boolean>(false);
   const [activeRollData, setActiveRollData] = useState<any>(null);
 
   const {
@@ -47,8 +49,11 @@ export default function App() {
     trialDaysRemaining,
     hasProAccess,
     loading,
+    hasCompletedOnboarding,
+    completeOnboarding,
     retentionDays,
     expirationAlertThreshold,
+
     addTrade,
     updateTradeStatus,
     removeTrade,
@@ -288,6 +293,7 @@ export default function App() {
             updateExpirationAlertThreshold={updateExpirationAlertThreshold}
             onClearData={clearAllData}
             onOpenPaywall={() => setShowPaywall(true)}
+            onReplayTour={() => setShowReplayTour(true)}
           />
         )}
       </View>
@@ -350,6 +356,31 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
+      {/* Onboarding Strategy Briefing Modal (First Launch & Replay Tour) */}
+      <Modal
+        visible={(!loading && !hasCompletedOnboarding) || showReplayTour}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        <Onboarding
+          visible={(!loading && !hasCompletedOnboarding) || showReplayTour}
+          isReplay={showReplayTour}
+          onComplete={() => {
+            if (!hasCompletedOnboarding) {
+              completeOnboarding();
+            }
+            setShowReplayTour(false);
+          }}
+          onOpenPaywall={() => {
+            if (!hasCompletedOnboarding) {
+              completeOnboarding();
+            }
+            setShowReplayTour(false);
+            setShowPaywall(true);
+          }}
+        />
+      </Modal>
+
       {/* RevenueCat Paywall Modal */}
       <Modal visible={showPaywall} animationType="slide" presentationStyle="pageSheet">
         <Subscription
@@ -360,6 +391,7 @@ export default function App() {
           }}
         />
       </Modal>
+
     </SafeAreaView>
   );
 }

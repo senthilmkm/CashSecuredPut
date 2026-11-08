@@ -27,3 +27,25 @@ export function pruneHistoryByRetention(historyList: CSPTrade[], maxDays: number
 
 export const FREE_TIER_MAX_TRADES = 1;
 export const FREE_TIER_MAX_HISTORY = 3;
+export const STORAGE_KEY_ONBOARDING = '@csp_onboarding_completed_v1';
+
+/**
+ * Pure helper to determine if onboarding should be displayed.
+ * - If user explicitly completed onboarding, return false.
+ * - If user already has active trades or history (existing user updating app), return false to avoid ambushing.
+ * - Otherwise (fresh install or reset), return true.
+ */
+export function shouldShowOnboarding(
+  onboardingSavedValue: string | null,
+  activeTradesCount: number,
+  historyTradesCount: number
+): boolean {
+  if (onboardingSavedValue === 'true') {
+    return false;
+  }
+  if (activeTradesCount > 0 || historyTradesCount > 0) {
+    return false;
+  }
+  return true;
+}
+
