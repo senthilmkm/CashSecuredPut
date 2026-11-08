@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -264,6 +265,7 @@ export default function RollSimulator({
   }, [initialData]);
 
   const handleSelectQuickTicker = (sym: string) => {
+    Keyboard.dismiss();
     setTicker(sym);
     const targetStrike = sym === 'NVDA' ? 120 : sym === 'TSLA' ? 220 : sym === 'MSFT' ? 410 : sym === 'SPY' ? 570 : 140;
     setCurrentStrike(targetStrike.toFixed(2));

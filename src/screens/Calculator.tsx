@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -203,6 +204,7 @@ export default function Calculator({
   }, []);
 
   const handleFetchQuote = async (symbolOverride?: string) => {
+    Keyboard.dismiss();
     const cleanSymbol = (typeof symbolOverride === 'string' ? symbolOverride : ticker).trim().toUpperCase();
     if (!cleanSymbol) {
       Alert.alert('Invalid Ticker', 'Please enter a valid stock symbol (e.g. AAPL, TSLA, NVDA).');
@@ -362,11 +364,13 @@ export default function Calculator({
   };
 
   const handleSelectQuickTicker = (sym: string) => {
+    Keyboard.dismiss();
     setTicker(sym);
     handleFetchQuote(sym);
   };
 
   const selectContractFromChain = (contract: CSPOptionContract) => {
+    Keyboard.dismiss();
     setSelectedContract(contract);
     setStrikePrice(contract.strike.toFixed(2));
     setPremium(contract.premium.toFixed(2));
