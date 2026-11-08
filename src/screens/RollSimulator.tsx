@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  ArrowLeft,
 } from 'lucide-react-native';
 import { calculateRollCSP, RollSimulationResult } from '../services/cspMath';
 import { getPutOptionChain, CSPOptionContract } from '../services/publicApi';
@@ -35,6 +36,7 @@ interface RollSimulatorProps {
   isPremium: boolean;
   onDismissActiveTrade?: () => void;
   onRollSuccess?: () => void;
+  onBack?: () => void;
 }
 
 export default function RollSimulator({
@@ -44,7 +46,9 @@ export default function RollSimulator({
   isPremium,
   onDismissActiveTrade,
   onRollSuccess,
+  onBack,
 }: RollSimulatorProps) {
+
   const [ticker, setTicker] = useState(initialData?.ticker || 'AAPL');
   const [currentStrike, setCurrentStrike] = useState(initialData?.strikePrice ? initialData.strikePrice.toString() : '140.00');
   const [currentContracts, setCurrentContracts] = useState(initialData?.contracts ? initialData.contracts.toString() : '1');
@@ -364,8 +368,22 @@ export default function RollSimulator({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Back to Portfolio Navigation Button */}
+      {onBack && (
+        <TouchableOpacity
+          style={styles.backNavRow}
+          onPress={onBack}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+        >
+          <ArrowLeft size={16} color="#10B981" style={{ marginRight: 6 }} />
+          <Text style={styles.backNavText}>Back to Portfolio</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Slim Header & Active Stock Indicator */}
       <View style={styles.slimHeaderCard}>
+
         <View style={styles.slimHeaderTopRow}>
           <View style={styles.tickerBadgeBox}>
             <Text style={styles.tickerBadgeText}>{ticker}</Text>
@@ -894,6 +912,19 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingBottom: 28,
   },
+  backNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  backNavText: {
+    color: '#10B981',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   slimHeaderCard: {
     backgroundColor: '#161E2E',
     borderRadius: 12,
@@ -902,6 +933,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1E293B',
   },
+
   slimHeaderTopRow: {
     flexDirection: 'row',
     alignItems: 'center',

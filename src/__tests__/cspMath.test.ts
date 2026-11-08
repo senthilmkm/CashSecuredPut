@@ -9,8 +9,9 @@ import {
   shouldShowOnboarding,
 } from '../services/storageUtils';
 import { checkEarningsRisk } from '../services/earningsService';
-
+import { getMarketSessionStatus } from '../services/marketHours';
 import { isCustomerEntitled } from '../services/entitlementUtils';
+
 import { groupTradesByMonth, calculateGoalPacing } from '../services/incomeAnalytics';
 import pricingConfig from '../constants/pricing.json';
 
@@ -523,7 +524,43 @@ export function runCSPMathTests() {
   // Scenario F: Reinstall scenario (empty storage)
   assert(shouldShowOnboarding(null, 0, 0) === true, 'Fresh reinstall with empty storage shows onboarding cleanly');
 
+  // Test 25: Market Session Status & Hours Evaluator
+  // 1. Regular Trading Hours (Wednesday 10:30 AM ET)
+  const openSession = getMarketSessionStatus(new Date('2026-03-18T14:30:00Z'));
+  assert(openSession.isOpen === true, 'Wednesday 10:30 AM ET evaluates as Open market');
+  assert(openSession.status === 'open', 'Status is open during regular trading hours');
+  assert(openSession.badgeTextColor === '#10B981', 'Open badge uses emerald green text');
+
+  // 2. Pre-Market Session (Wednesday 8:00 AM ET)
+  const preSession = getMarketSessionStatus(new Date('2026-03-18T12:00:00Z'));
+  assert(preSession.isOpen === false, 'Wednesday 8:00 AM ET evaluates as Closed (Pre-Market)');
+  assert(preSession.status === 'pre_market', 'Status is pre_market before 9:30 AM ET');
+
+  // 3. After-Hours Session (Wednesday 5:00 PM ET)
+  const afterSession = getMarketSessionStatus(new Date('2026-03-18T21:00:00Z'));
+  assert(afterSession.isOpen === false, 'Wednesday 5:00 PM ET evaluates as Closed (After-Hours)');
+  assert(afterSession.status === 'after_hours', 'Status is after_hours after 4:00 PM ET');
+
+  // 4. Weekend (Saturday & Sunday)
+  const satSession = getMarketSessionStatus(new Date('2026-03-21T18:00:00Z'));
+  assert(satSession.isOpen === false, 'Saturday evaluates as Closed market');
+  assert(satSession.status === 'closed_weekend', 'Status is closed_weekend on Saturday');
+
+  const sunSession = getMarketSessionStatus(new Date('2026-03-22T18:00:00Z'));
+  assert(sunSession.isOpen === false, 'Sunday evaluates as Closed market');
+  assert(sunSession.status === 'closed_weekend', 'Status is closed_weekend on Sunday');
+
+  // 5. Major Holiday (July 4th)
+  const holidaySession = getMarketSessionStatus(new Date('2026-07-04T16:00:00Z'));
+  assert(holidaySession.isOpen === false, 'July 4th evaluates as Closed holiday');
+
+  // 6. Current runtime invocation returns valid non-null object
+  const currentSession = getMarketSessionStatus();
+  assert(typeof currentSession.isOpen === 'boolean', 'Current runtime session returns boolean isOpen');
+  assert(currentSession.label.length > 0, 'Current runtime session returns descriptive label');
+
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
+
 
   if (failed > 0) {
     process.exit(1);

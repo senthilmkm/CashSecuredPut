@@ -258,6 +258,7 @@ export default function App() {
             onUpdateStatus={updateTradeStatus}
             onRemoveTrade={removeTrade}
             onRollTrade={handleOpenRollWithData}
+            onOpenRollSim={() => handleOpenRollWithData(null)}
             onTransitionToWheel={handleTransitionTradeToWheel}
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
@@ -275,6 +276,10 @@ export default function App() {
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
             onDismissActiveTrade={() => setActiveRollData(null)}
+            onBack={() => {
+              setActiveRollData(null);
+              setCurrentTab('portfolio');
+            }}
             onRollSuccess={() => {
               setActiveRollData(null);
               setCurrentTab('portfolio');
@@ -298,7 +303,7 @@ export default function App() {
         )}
       </View>
 
-      {/* Bottom Navigation Tab Bar */}
+      {/* 5-Tab Apple HIG Bottom Navigation Tab Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={styles.tabItem}
@@ -306,14 +311,6 @@ export default function App() {
         >
           <Search color={currentTab === 'analyzer' ? '#10B981' : '#64748B'} size={20} />
           <Text style={[styles.tabLabel, currentTab === 'analyzer' && styles.tabLabelActive]}>Analyzer</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.tabItem}
-          onPress={() => setCurrentTab('wheel')}
-        >
-          <RotateCcw color={currentTab === 'wheel' ? '#10B981' : '#64748B'} size={20} />
-          <Text style={[styles.tabLabel, currentTab === 'wheel' && styles.tabLabelActive]}>Wheel</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -333,18 +330,18 @@ export default function App() {
 
         <TouchableOpacity
           style={styles.tabItem}
-          onPress={() => setCurrentTab('guides')}
+          onPress={() => setCurrentTab('wheel')}
         >
-          <BookOpen color={currentTab === 'guides' ? '#10B981' : '#64748B'} size={20} />
-          <Text style={[styles.tabLabel, currentTab === 'guides' && styles.tabLabelActive]}>Learn</Text>
+          <RotateCcw color={currentTab === 'wheel' ? '#10B981' : '#64748B'} size={20} />
+          <Text style={[styles.tabLabel, currentTab === 'wheel' && styles.tabLabelActive]}>Wheel</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.tabItem}
-          onPress={() => setCurrentTab('roll')}
+          onPress={() => setCurrentTab('guides')}
         >
-          <RefreshCw color={currentTab === 'roll' ? '#10B981' : '#64748B'} size={20} />
-          <Text style={[styles.tabLabel, currentTab === 'roll' && styles.tabLabelActive]}>Roll Sim</Text>
+          <BookOpen color={currentTab === 'guides' ? '#10B981' : '#64748B'} size={20} />
+          <Text style={[styles.tabLabel, currentTab === 'guides' && styles.tabLabelActive]}>Learn</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -355,6 +352,7 @@ export default function App() {
           <Text style={[styles.tabLabel, currentTab === 'settings' && styles.tabLabelActive]}>Settings</Text>
         </TouchableOpacity>
       </View>
+
 
       {/* Onboarding Strategy Briefing Modal (First Launch & Replay Tour) */}
       <Modal

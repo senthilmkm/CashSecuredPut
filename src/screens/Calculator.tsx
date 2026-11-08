@@ -28,7 +28,9 @@ import {
 import { calculateCSPMetrics, CSPTradeMetrics } from '../services/cspMath';
 import { getMarketQuote, getPutOptionChain, CSPOptionContract } from '../services/publicApi';
 import { checkEarningsRisk, EarningsRiskResult } from '../services/earningsService';
+import { getMarketSessionStatus } from '../services/marketHours';
 import PayoffChart from '../components/PayoffChart';
+
 
 interface CalculatorProps {
   onSaveTrade: (tradeData: any) => Promise<{ success: boolean; paywallTriggered?: boolean }>;
@@ -63,8 +65,11 @@ export default function Calculator({
   const [selectedContract, setSelectedContract] = useState<CSPOptionContract | null>(null);
   const [selectedExpFilter, setSelectedExpFilter] = useState<string>('all');
   const [metrics, setMetrics] = useState<CSPTradeMetrics | null>(null);
+  const [marketStatusTimestamp, setMarketStatusTimestamp] = useState<number>(Date.now());
+  const marketStatus = useMemo(() => getMarketSessionStatus(), [marketStatusTimestamp]);
 
   const quoteRequestId = useRef(0);
+
   const isMountedRef = useRef(true);
   const dteTimeoutRef = useRef<any>(null);
 
@@ -492,7 +497,23 @@ export default function Calculator({
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Market Session Status Banner */}
+          <View style={styles.marketStatusRow}>
+            <View style={[styles.marketStatusBadge, { backgroundColor: marketStatus.badgeBg }]}>
+              <View style={[styles.marketStatusDot, { backgroundColor: marketStatus.badgeTextColor }]} />
+              <Text style={[styles.marketStatusText, { color: marketStatus.badgeTextColor }]}>
+                {marketStatus.label}
+              </Text>
+            </View>
+            {stockPrice && parseFloat(stockPrice) > 0 && (
+              <Text style={styles.marketPriceSummary}>
+                {ticker}: ${parseFloat(stockPrice).toFixed(2)}
+              </Text>
+            )}
+          </View>
         </View>
+
 
         {/* SIMULATED / MOCK DATA WARNING BANNER */}
         {isSimulatedData && (
@@ -1513,6 +1534,39 @@ const styles = StyleSheet.create({
   quickChipTextActive: {
     color: '#FFFFFF',
   },
+  marketStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+  },
+  marketStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+  },
+  marketStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  marketStatusText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  marketPriceSummary: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+
   syncingBanner: {
     flexDirection: 'row',
     alignItems: 'center',

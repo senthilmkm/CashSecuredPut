@@ -48,6 +48,7 @@ interface ActiveTradesProps {
   onUpdateStatus: (tradeId: string, status: 'expired_worthless' | 'assigned' | 'closed_early') => void;
   onRemoveTrade: (tradeId: string) => void;
   onRollTrade: (trade: CSPTrade) => void;
+  onOpenRollSim?: () => void;
   onTransitionToWheel?: (tradeData: { ticker: string; strike: number; premium: number; shares: number }) => void;
   onOpenPaywall: () => void;
   isPremium: boolean;
@@ -59,10 +60,12 @@ export default function ActiveTrades({
   onUpdateStatus,
   onRemoveTrade,
   onRollTrade,
+  onOpenRollSim,
   onTransitionToWheel,
   onOpenPaywall,
   isPremium,
 }: ActiveTradesProps) {
+
   const [viewMode, setViewMode] = useState<'active' | 'history' | 'analytics'>('active');
   const [annualGoal, setAnnualGoal] = useState<number>(5000);
 
@@ -324,19 +327,27 @@ export default function ActiveTrades({
         </View>
       ) : null}
 
-      {/* Export Report Bar */}
+      {/* Portfolio Quick Tools Bar */}
       <View style={styles.exportBar}>
         <TouchableOpacity style={styles.exportPdfBtn} onPress={handleExportPrompt} activeOpacity={0.85}>
           {isPremium ? (
-            <Share2 size={14} color="#FFF" style={{ marginRight: 6 }} />
+            <Share2 size={13} color="#FFF" style={{ marginRight: 5 }} />
           ) : (
-            <Crown size={14} color="#F59E0B" style={{ marginRight: 6 }} />
+            <Crown size={13} color="#F59E0B" style={{ marginRight: 5 }} />
           )}
           <Text style={styles.exportPdfBtnText}>
-            {isPremium ? 'Export Portfolio PDF / CSV Report' : 'Export Portfolio Report (PRO)'}
+            {isPremium ? 'Export Report' : 'Export (PRO)'}
           </Text>
         </TouchableOpacity>
+
+        {onOpenRollSim && (
+          <TouchableOpacity style={styles.quickRollBtn} onPress={onOpenRollSim} activeOpacity={0.85}>
+            <RefreshCw size={13} color="#10B981" style={{ marginRight: 5 }} />
+            <Text style={styles.quickRollBtnText}>Roll Simulator</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
 
       {/* Free Tier Limit Warning Banner */}
       {!isPremium && trades.length >= FREE_TIER_MAX_TRADES && viewMode === 'active' && (
@@ -1233,23 +1244,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   exportBar: {
-    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   exportPdfBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0F172A',
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1E3A8A',
+    marginRight: 8,
   },
   exportPdfBtnText: {
     color: '#3B82F6',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12.5,
   },
+  quickRollBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  quickRollBtnText: {
+    color: '#10B981',
+    fontWeight: '700',
+    fontSize: 12.5,
+  },
+
   viewModeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
