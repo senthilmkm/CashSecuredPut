@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
@@ -174,6 +175,28 @@ export default function App() {
     }
   };
 
+  const handleBadgePress = () => {
+    if (isPremium) {
+      Alert.alert(
+        'Pro Access Active 👑',
+        'You have full access to CashSecuredProfit Pro. Unlimited portfolio tracking, automated expiration alerts, live option chains, Roll Simulator, and the Wheel Suite are active on your device.',
+        [
+          {
+            text: 'Manage in Apple ID',
+            onPress: () => {
+              Linking.openURL('https://apps.apple.com/account/subscriptions').catch(() => {
+                Alert.alert('Error', 'Unable to open Apple ID subscription settings.');
+              });
+            },
+          },
+          { text: 'Done', style: 'cancel' },
+        ]
+      );
+    } else {
+      setShowPaywall(true);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
@@ -183,7 +206,7 @@ export default function App() {
         <View style={styles.headerTitleRow}>
           <Text style={styles.headerTitle}>CashSecured Put & Wheel</Text>
 
-          <TouchableOpacity onPress={() => setShowPaywall(true)} activeOpacity={0.8}>
+          <TouchableOpacity onPress={handleBadgePress} activeOpacity={0.8}>
             {isPremium ? (
               <View style={[styles.tierBadge, styles.badgePro]}>
                 <Crown color="#FFF" size={12} style={{ marginRight: 4 }} />
