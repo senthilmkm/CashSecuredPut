@@ -14,10 +14,12 @@
     }
   },
   "freeTier": {
-    "maxSavedTrades": 3,
+    "maxSavedTrades": 1,
+    "maxHistoryTrades": 3,
     "allowCalculator": true,
     "allowLiveQuotes": true,
     "allowRollSimulator": false,
-    "allowExport": false
+    "allowExport": false,
+    "allowExpirationAlerts": false
   }
 }

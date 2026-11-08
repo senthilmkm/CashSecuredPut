@@ -62,16 +62,19 @@ export default function App() {
   useEffect(() => {
     if (loading) return;
 
+    let isCancelled = false;
+
     async function scheduleExpirationAlerts() {
       try {
         const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        if (isCancelled) return;
         for (const notif of scheduled) {
           if (notif.identifier.startsWith('csp_expiry_')) {
             await Notifications.cancelScheduledNotificationAsync(notif.identifier);
           }
         }
 
-        if (expirationAlertThreshold === 0 || trades.length === 0) return;
+        if (expirationAlertThreshold === 0 || trades.length === 0 || !hasProAccess || isCancelled) return;
 
         const { status } = await Notifications.getPermissionsAsync();
         let finalStatus = status;
@@ -79,15 +82,17 @@ export default function App() {
           const { status: askStatus } = await Notifications.requestPermissionsAsync();
           finalStatus = askStatus;
         }
-        if (finalStatus !== 'granted') return;
+        if (finalStatus !== 'granted' || isCancelled) return;
 
         const NOTIFIED_KEY = '@csp_notified_dates';
         const todayStr = new Date().toISOString().split('T')[0];
         const notifiedRaw = await AsyncStorage.getItem(NOTIFIED_KEY);
+        if (isCancelled) return;
         const notifiedMap: Record<string, string> = notifiedRaw ? JSON.parse(notifiedRaw) : {};
 
         let mapChanged = false;
         for (const trade of trades) {
+          if (isCancelled) return;
           const dteLeft = calculateDaysRemaining(trade.expirationDate, trade.dte);
           if (dteLeft <= expirationAlertThreshold && trade.status === 'active') {
             // Deduplicate: notify at most once per calendar day per position
@@ -106,16 +111,22 @@ export default function App() {
           }
         }
 
-        if (mapChanged) {
+        if (mapChanged && !isCancelled) {
           await AsyncStorage.setItem(NOTIFIED_KEY, JSON.stringify(notifiedMap));
         }
       } catch (err) {
-        console.warn('[Notifications] Alert scheduling failed:', err);
+        if (!isCancelled) {
+          console.warn('[Notifications] Alert scheduling failed:', err);
+        }
       }
     }
 
     scheduleExpirationAlerts();
-  }, [loading, trades, expirationAlertThreshold]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [loading, trades, expirationAlertThreshold, hasProAccess]);
 
   const handleOpenRollWithData = (tradeData: any) => {
     setActiveRollData(tradeData);

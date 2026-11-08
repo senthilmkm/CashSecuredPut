@@ -240,8 +240,8 @@ export function calculateRollCSP(params: {
     originalPremiumPerShare = 0,
   } = params;
 
-  const validCurrentContracts = Math.max(1, currentContracts);
-  const validNewContracts = Math.max(1, newContracts);
+  const validCurrentContracts = Math.max(0, currentContracts);
+  const validNewContracts = Math.max(0, newContracts);
 
   const closeDebitTotal = closeCostPerContract * 100 * validCurrentContracts;
   const newCreditTotal = newPremiumPerContract * 100 * validNewContracts;

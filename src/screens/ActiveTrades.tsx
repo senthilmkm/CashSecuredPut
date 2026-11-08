@@ -35,7 +35,7 @@ import {
   TrendingUp,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CSPTrade } from '../hooks/useAppStorage';
+import { CSPTrade, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY } from '../hooks/useAppStorage';
 import { exportPortfolioPDF, exportPortfolioCSV, calculateDaysRemaining } from '../services/exportService';
 import { getMarketQuote } from '../services/publicApi';
 import { checkEarningsRisk } from '../services/earningsService';
@@ -339,13 +339,13 @@ export default function ActiveTrades({
       </View>
 
       {/* Free Tier Limit Warning Banner */}
-      {!isPremium && trades.length >= 3 && viewMode === 'active' && (
+      {!isPremium && trades.length >= FREE_TIER_MAX_TRADES && viewMode === 'active' && (
         <TouchableOpacity style={styles.paywallBanner} onPress={onOpenPaywall} activeOpacity={0.85}>
           <LinearGradient colors={['#7C3AED', '#4C1D95']} style={styles.bannerGradient}>
             <Crown color="#F59E0B" size={24} style={{ marginRight: 12 }} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.bannerTitle}>Free Tier Capacity Reached (3/3)</Text>
-              <Text style={styles.bannerSub}>Upgrade to Pro for unlimited trades & expiration alerts.</Text>
+              <Text style={styles.bannerTitle}>Free Tier Limit Reached ({trades.length}/{FREE_TIER_MAX_TRADES} Active)</Text>
+              <Text style={styles.bannerSub}>Upgrade to Pro for unlimited simultaneous trades & automated expiration alerts.</Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -413,70 +413,86 @@ export default function ActiveTrades({
               </Text>
             </View>
           ) : (
-            history.map((hTrade) => {
-            const hPrem = hTrade.cumulativePremium !== undefined ? hTrade.cumulativePremium : hTrade.premium;
-            const netIncome = (hPrem * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
-            const effBasis = Math.max(0, hTrade.strikePrice - (hTrade.cumulativeCostBasisCredit || hPrem)).toFixed(2);
-            const statusLabel =
-              hTrade.status === 'expired_worthless'
-                ? 'Expired Worthless (100% Win)'
-                : hTrade.status === 'assigned'
-                ? 'Assigned (Exported)'
-                : 'Closed Early';
+            <>
+              {(isPremium ? history : history.slice(0, FREE_TIER_MAX_HISTORY)).map((hTrade) => {
+                const hPrem = hTrade.cumulativePremium !== undefined ? hTrade.cumulativePremium : hTrade.premium;
+                const netIncome = (hPrem * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
+                const effBasis = Math.max(0, hTrade.strikePrice - (hTrade.cumulativeCostBasisCredit || hPrem)).toFixed(2);
+                const statusLabel =
+                  hTrade.status === 'expired_worthless'
+                    ? 'Expired Worthless (100% Win)'
+                    : hTrade.status === 'assigned'
+                    ? 'Assigned (Exported)'
+                    : 'Closed Early';
 
-            const statusStyle =
-              hTrade.status === 'expired_worthless'
-                ? styles.tagOTM
-                : hTrade.status === 'assigned'
-                ? styles.tagITM
-                : styles.tagWarning;
+                const statusStyle =
+                  hTrade.status === 'expired_worthless'
+                    ? styles.tagOTM
+                    : hTrade.status === 'assigned'
+                    ? styles.tagITM
+                    : styles.tagWarning;
 
-            const textStyle =
-              hTrade.status === 'expired_worthless'
-                ? styles.tagTextOTM
-                : hTrade.status === 'assigned'
-                ? styles.tagTextITM
-                : styles.tagTextWarning;
+                const textStyle =
+                  hTrade.status === 'expired_worthless'
+                    ? styles.tagTextOTM
+                    : hTrade.status === 'assigned'
+                    ? styles.tagTextITM
+                    : styles.tagTextWarning;
 
-            return (
-              <View key={hTrade.id} style={styles.tradeCard}>
-                <View style={styles.cardTopRow}>
-                  <View style={styles.tickerGroup}>
-                    <Text style={styles.tickerText}>{hTrade.ticker}</Text>
-                    <View style={[styles.statusTag, statusStyle]}>
-                      <Text style={[styles.tagText, textStyle]}>{statusLabel}</Text>
+                return (
+                  <View key={hTrade.id} style={styles.tradeCard}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.tickerGroup}>
+                        <Text style={styles.tickerText}>{hTrade.ticker}</Text>
+                        <View style={[styles.statusTag, statusStyle]}>
+                          <Text style={[styles.tagText, textStyle]}>{statusLabel}</Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600' }}>
+                        {hTrade.contracts} Contract{hTrade.contracts !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
+
+                    <View style={styles.tradeGrid}>
+                      <View style={styles.tradeCol}>
+                        <Text style={styles.tradeLabel}>Strike Price</Text>
+                        <Text style={styles.tradeVal}>${hTrade.strikePrice.toFixed(2)}</Text>
+                      </View>
+
+                      <View style={styles.tradeCol}>
+                        <Text style={styles.tradeLabel}>Realized Income</Text>
+                        <Text style={styles.tradeValSuccess}>+${netIncome}</Text>
+                      </View>
+
+                      <View style={styles.tradeCol}>
+                        <Text style={styles.tradeLabel}>Effective Basis</Text>
+                        <Text style={styles.tradeVal}>${effBasis}</Text>
+                      </View>
+
+                      <View style={styles.tradeCol}>
+                        <Text style={styles.tradeLabel}>Collateral</Text>
+                        <Text style={styles.tradeValPrimary}>${(hTrade.strikePrice * 100 * hTrade.contracts).toLocaleString()}</Text>
+                      </View>
                     </View>
                   </View>
-                  <Text style={{ color: '#64748B', fontSize: 12, fontWeight: '600' }}>
-                    {hTrade.contracts} Contract{hTrade.contracts !== 1 ? 's' : ''}
-                  </Text>
-                </View>
+                );
+              })}
 
-                <View style={styles.tradeGrid}>
-                  <View style={styles.tradeCol}>
-                    <Text style={styles.tradeLabel}>Strike Price</Text>
-                    <Text style={styles.tradeVal}>${hTrade.strikePrice.toFixed(2)}</Text>
+              {!isPremium && history.length > FREE_TIER_MAX_HISTORY && (
+                <TouchableOpacity style={styles.historyPaywallCard} onPress={onOpenPaywall} activeOpacity={0.85}>
+                  <Crown size={22} color="#F59E0B" style={{ marginRight: 12 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.historyPaywallTitle}>
+                      +{history.length - FREE_TIER_MAX_HISTORY} More Closed Trade{history.length - FREE_TIER_MAX_HISTORY !== 1 ? 's' : ''} Saved
+                    </Text>
+                    <Text style={styles.historyPaywallSub}>
+                      Free tier displays your {FREE_TIER_MAX_HISTORY} most recent closed trades. Upgrade to Pro for complete lifetime trade journaling and PDF/CSV exports.
+                    </Text>
                   </View>
-
-                  <View style={styles.tradeCol}>
-                    <Text style={styles.tradeLabel}>Realized Income</Text>
-                    <Text style={styles.tradeValSuccess}>+${netIncome}</Text>
-                  </View>
-
-                  <View style={styles.tradeCol}>
-                    <Text style={styles.tradeLabel}>Effective Basis</Text>
-                    <Text style={styles.tradeVal}>${effBasis}</Text>
-                  </View>
-
-                  <View style={styles.tradeCol}>
-                    <Text style={styles.tradeLabel}>Collateral</Text>
-                    <Text style={styles.tradeValPrimary}>${(hTrade.strikePrice * 100 * hTrade.contracts).toLocaleString()}</Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })
-        )}
+                </TouchableOpacity>
+              )}
+            </>
+          )}
         </>
       ) : (
         <>
@@ -855,6 +871,28 @@ const styles = StyleSheet.create({
   bannerSub: {
     color: '#DDD6FE',
     fontSize: 11,
+  },
+  historyPaywallCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161C2D',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+  },
+  historyPaywallTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#F59E0B',
+    marginBottom: 2,
+  },
+  historyPaywallSub: {
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 16,
   },
   itmAlertBanner: {
     flexDirection: 'row',

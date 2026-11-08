@@ -24,3 +24,6 @@ export function pruneHistoryByRetention(historyList: CSPTrade[], maxDays: number
     return isNaN(createdMs) || createdMs >= cutoffMs;
   });
 }
+
+export const FREE_TIER_MAX_TRADES = 1;
+export const FREE_TIER_MAX_HISTORY = 3;

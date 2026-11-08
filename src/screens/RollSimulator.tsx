@@ -80,6 +80,12 @@ export default function RollSimulator({
     }, 750);
   };
 
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
+  }, []);
+
   // Load option chain and auto-populate buyback price and new contract quotes
   const loadOptionChainData = async (tickerSym: string, stockNum: number, targetDteNum: number) => {
     try {

@@ -51,7 +51,7 @@ export function groupTradesByMonth(history: CSPTrade[], monthsToShow: number = 6
       tradeCount: 0,
       winCount: 0,
       assignedCount: 0,
-      winRatePercent: 100,
+      winRatePercent: 0,
       trades: [],
     });
   }
@@ -89,7 +89,7 @@ export function groupTradesByMonth(history: CSPTrade[], monthsToShow: number = 6
     if (bucket.tradeCount > 0) {
       bucket.winRatePercent = Math.round((bucket.winCount / bucket.tradeCount) * 100);
     } else {
-      bucket.winRatePercent = 100;
+      bucket.winRatePercent = 0;
     }
   }
 

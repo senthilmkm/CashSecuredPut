@@ -11,7 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Crown, X, Shield, RefreshCw, Zap, TrendingUp, Sparkles } from 'lucide-react-native';
+import { Crown, X, Shield, RefreshCw, Zap, TrendingUp, Sparkles, FileText } from 'lucide-react-native';
 import {
   purchasePremiumPlan,
   restorePremiumPurchases,
@@ -148,7 +148,7 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
             </View>
             <View style={styles.featureTextCol}>
               <Text style={styles.featureTitle}>Unlimited Portfolio Tracking</Text>
-              <Text style={styles.featureDesc}>Store and manage unlimited active Cash-Secured Put positions.</Text>
+              <Text style={styles.featureDesc}>Store and manage unlimited active CSP positions (Free tier limited to 1 active trade).</Text>
             </View>
           </View>
 
@@ -157,8 +157,8 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
               <RefreshCw color="#3B82F6" size={20} />
             </View>
             <View style={styles.featureTextCol}>
-              <Text style={styles.featureTitle}>Roll Down & Out Calculator</Text>
-              <Text style={styles.featureDesc}>Calculate net credits when adjusting strike prices & expiration dates.</Text>
+              <Text style={styles.featureTitle}>Roll Down & Out Simulator</Text>
+              <Text style={styles.featureDesc}>1-tap roll execution with live strikes, credit calculations & portfolio sync.</Text>
             </View>
           </View>
 
@@ -167,8 +167,8 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
               <TrendingUp color="#F59E0B" size={20} />
             </View>
             <View style={styles.featureTextCol}>
-              <Text style={styles.featureTitle}>The Wheel Strategy Bridge</Text>
-              <Text style={styles.featureDesc}>Calculate net stock cost basis on assignment & link with Covered Call apps.</Text>
+              <Text style={styles.featureTitle}>The Wheel Strategy Suite</Text>
+              <Text style={styles.featureDesc}>Track unlimited active Wheel positions & auto-calculate net stock cost basis on assignment.</Text>
             </View>
           </View>
 
@@ -177,8 +177,18 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
               <Shield color="#8B5CF6" size={20} />
             </View>
             <View style={styles.featureTextCol}>
-              <Text style={styles.featureTitle}>Expiration Push Notifications</Text>
-              <Text style={styles.featureDesc}>Get background alerts before option expiration to lock in gains.</Text>
+              <Text style={styles.featureTitle}>Automated Expiration Push Alerts</Text>
+              <Text style={styles.featureDesc}>Get background notifications before option expiration to lock in gains & avoid unwanted assignment.</Text>
+            </View>
+          </View>
+
+          <View style={styles.featureRow}>
+            <View style={styles.featureIconBox}>
+              <FileText color="#06B6D4" size={20} />
+            </View>
+            <View style={styles.featureTextCol}>
+              <Text style={styles.featureTitle}>Full Lifetime History & PDF/CSV Export</Text>
+              <Text style={styles.featureDesc}>Access your complete historical trade journal and export formatted PDF & CSV reports anytime.</Text>
             </View>
           </View>
         </View>

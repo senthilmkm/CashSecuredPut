@@ -300,8 +300,22 @@ export default function Settings({
 
       {/* 4. Expiration Alert Thresholds (Custom Snapping Slider) */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Expiration Alert Reminders</Text>
-        <Text style={styles.description}>Send background alerts when positions are nearing expiration.</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Expiration Alert Reminders</Text>
+          {!isPremium && (
+            <TouchableOpacity onPress={onOpenPaywall} activeOpacity={0.8}>
+              <View style={styles.proTag}>
+                <Crown size={11} color="#F59E0B" style={{ marginRight: 3 }} />
+                <Text style={styles.proTagText}>PRO</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
+        <Text style={styles.description}>
+          {isPremium
+            ? 'Send background alerts when positions are nearing expiration.'
+            : 'Pro Feature: Receive automated background alerts when your puts approach expiration to prevent accidental assignment.'}
+        </Text>
 
         <View style={styles.sliderContainer}>
           <View style={styles.sliderTrack} />
@@ -311,7 +325,13 @@ export default function Settings({
               <TouchableOpacity
                 key={val}
                 style={[styles.sliderNode, idx === currentAlertIndex && styles.sliderNodeSelected]}
-                onPress={() => updateExpirationAlertThreshold(val)}
+                onPress={() => {
+                  if (!isPremium) {
+                    onOpenPaywall();
+                  } else {
+                    updateExpirationAlertThreshold(val);
+                  }
+                }}
               />
             ))}
           </View>
@@ -321,12 +341,25 @@ export default function Settings({
             <Text
               key={label}
               style={[styles.sliderLabelText, idx === currentAlertIndex && styles.sliderLabelTextActive]}
-              onPress={() => updateExpirationAlertThreshold(alertValues[idx])}
+              onPress={() => {
+                if (!isPremium) {
+                  onOpenPaywall();
+                } else {
+                  updateExpirationAlertThreshold(alertValues[idx]);
+                }
+              }}
             >
               {label}
             </Text>
           ))}
         </View>
+
+        {!isPremium && (
+          <TouchableOpacity style={styles.proAlertLockedRibbon} onPress={onOpenPaywall} activeOpacity={0.85}>
+            <Crown size={13} color="#F59E0B" style={{ marginRight: 6 }} />
+            <Text style={styles.proAlertLockedText}>Upgrade to Pro to enable automated expiration push alerts</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* 5. Data & Trade Exports Section */}
@@ -404,7 +437,7 @@ export default function Settings({
       </View>
 
       {/* Version Details */}
-      <Text style={styles.versionText}>CashSecuredProfit v1.0.0 (Expo SDK 57)</Text>
+      <Text style={styles.versionText}>CashSecuredProfit v1.1.0 (Expo SDK 57)</Text>
     </ScrollView>
   );
 }
@@ -466,6 +499,45 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  proTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  proTagText: {
+    color: '#F59E0B',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  proAlertLockedRibbon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  proAlertLockedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59E0B',
   },
   description: {
     fontSize: 12,

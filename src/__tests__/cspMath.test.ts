@@ -1,9 +1,10 @@
 declare const process: any;
 import { calculateCSPMetrics, calculateRollCSP, calculateCSPTimeDecay } from '../services/cspMath';
-import { pruneHistoryByRetention, CSPTrade } from '../services/storageUtils';
+import { pruneHistoryByRetention, CSPTrade, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY } from '../services/storageUtils';
 import { checkEarningsRisk } from '../services/earningsService';
 import { isCustomerEntitled } from '../services/entitlementUtils';
 import { groupTradesByMonth, calculateGoalPacing } from '../services/incomeAnalytics';
+import pricingConfig from '../constants/pricing.json';
 
 export function runCSPMathTests() {
   let passed = 0;
@@ -423,6 +424,78 @@ export function runCSPMathTests() {
   });
   assert(roll2.netCreditOrDebit === 100, 'Roll 2 generates +$100 net credit');
   assert(roll2.newEffectiveCostBasis === 124.50, 'Roll 2 effective cost basis = $130 - $5.50 = $124.50');
+
+  // Test 19: Tightened Free Tier Configuration & Trade Limits
+  assert(FREE_TIER_MAX_TRADES === 1, 'FREE_TIER_MAX_TRADES is tightened to 1');
+  assert(FREE_TIER_MAX_HISTORY === 3, 'FREE_TIER_MAX_HISTORY is capped at 3');
+  assert(pricingConfig.freeTier.maxSavedTrades === 1, 'pricing.json maxSavedTrades is 1');
+  assert(pricingConfig.freeTier.maxHistoryTrades === 3, 'pricing.json maxHistoryTrades is 3');
+  assert(pricingConfig.freeTier.allowExpirationAlerts === false, 'pricing.json allowExpirationAlerts is false');
+
+  // Free Tier History Slicing
+  const mockHistoryTierTest = [
+    { id: '1', ticker: 'AAPL', status: 'expired_worthless' },
+    { id: '2', ticker: 'NVDA', status: 'expired_worthless' },
+    { id: '3', ticker: 'TSLA', status: 'assigned' },
+    { id: '4', ticker: 'AMD', status: 'closed_early' },
+    { id: '5', ticker: 'MSFT', status: 'expired_worthless' },
+  ];
+  const freeHistory = mockHistoryTierTest.slice(0, FREE_TIER_MAX_HISTORY);
+  assert(freeHistory.length === 3, 'Free history view slices to exactly 3 items');
+  assert(mockHistoryTierTest.length - FREE_TIER_MAX_HISTORY === 2, 'Detects 2 locked archived trades accurately');
+
+  // Test 20: Empty History Analytics & Division-by-Zero Resilience
+  const emptyBuckets = groupTradesByMonth([], 6);
+  assert(emptyBuckets.length === 6, 'Empty history generates 6 valid monthly buckets');
+  assert(emptyBuckets[0].netIncome === 0, 'Empty bucket net income is exactly 0');
+  assert(emptyBuckets[0].winRatePercent === 0, 'Empty bucket win rate is 0 without NaN');
+  assert(emptyBuckets[0].tradeCount === 0, 'Empty bucket trade count is 0');
+
+  // Test 21: Goal Pacing with Zero or Negative Annual Goal
+  const zeroGoalPacing = calculateGoalPacing(emptyBuckets, 0);
+  assert(zeroGoalPacing.percentOfGoal === 0, 'Zero goal returns 0 percent pacing without division by zero');
+  assert(zeroGoalPacing.projectedAnnual === 0, 'Zero goal annual run rate is 0');
+
+  const negGoalPacing = calculateGoalPacing(emptyBuckets, -1000);
+  assert(negGoalPacing.percentOfGoal === 0, 'Negative goal safely returns 0% without NaN');
+
+  // Test 22: Negative / Zero Inputs in Roll CSP & CSP Metrics
+  const negStrikeCSP = calculateCSPMetrics({
+    stockPrice: -50,
+    strikePrice: -40,
+    premium: -2,
+    contracts: 0,
+    dte: 0,
+  });
+  assert(negStrikeCSP.score === 0, 'Negative strike & stock returns 0 score without throwing');
+  assert(negStrikeCSP.collateralRequired === 0, 'Zero contracts return 0 collateral required');
+  assert(!isNaN(negStrikeCSP.annualizedApr), 'Annualized APR is not NaN for zero inputs');
+
+  const negRoll = calculateRollCSP({
+    currentStrike: -100,
+    currentContracts: 0,
+    closeCostPerContract: -5,
+    newStrike: -90,
+    newPremiumPerContract: -2,
+  });
+  assert(negRoll.netCreditOrDebit === 0, 'Zero contracts roll returns 0 net credit');
+  assert(negRoll.collateralDifference === 0, 'Zero contracts roll collateral difference is 0');
+
+  // Test 23: Free Tier vs Pro Gate Logic Simulation
+  const simulateAddTrade = (currentCount: number, isPro: boolean) => {
+    return (!isPro && currentCount >= FREE_TIER_MAX_TRADES) ? { allowed: false, paywall: true } : { allowed: true, paywall: false };
+  };
+  assert(simulateAddTrade(0, false).allowed === true, 'Free user can add 1st trade');
+  assert(simulateAddTrade(1, false).allowed === false, 'Free user blocked on 2nd trade');
+  assert(simulateAddTrade(1, false).paywall === true, 'Free user triggers paywall on 2nd trade');
+  assert(simulateAddTrade(10, true).allowed === true, 'Pro user can add unlimited trades');
+
+  const simulateWheelTransition = (wheelCount: number, isPro: boolean) => {
+    return (!isPro && wheelCount >= 1) ? { allowed: false, paywall: true } : { allowed: true, paywall: false };
+  };
+  assert(simulateWheelTransition(0, false).allowed === true, 'Free user can start 1st Wheel position');
+  assert(simulateWheelTransition(1, false).allowed === false, 'Free user blocked on 2nd Wheel position');
+  assert(simulateWheelTransition(5, true).allowed === true, 'Pro user can manage unlimited Wheel positions');
 
   console.log(`\nResults: ${passed} passed, ${failed} failed.\n`);
   if (failed > 0) {

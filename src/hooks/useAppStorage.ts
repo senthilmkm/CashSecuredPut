@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPremiumStatus } from '../services/purchases';
-import { CSPTrade, pruneHistoryByRetention } from '../services/storageUtils';
+import { CSPTrade, pruneHistoryByRetention, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY } from '../services/storageUtils';
 
-export { CSPTrade, pruneHistoryByRetention };
+export { CSPTrade, pruneHistoryByRetention, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY };
 
 const STORAGE_KEYS = {
   TRADES: '@CashSecuredProfit:trades',
@@ -15,7 +15,6 @@ const STORAGE_KEYS = {
   WHEEL: '@csp_wheel_positions_v1',
 };
 
-export const FREE_TIER_MAX_TRADES = 3;
 export const TRIAL_DURATION_DAYS = 7;
 
 export function useAppStorage() {
