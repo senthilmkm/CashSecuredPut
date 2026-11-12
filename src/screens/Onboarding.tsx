@@ -22,6 +22,7 @@ import {
   Crown,
 } from 'lucide-react-native';
 import { restorePremiumPurchases } from '../services/purchases';
+import { FREE_TIER_COPY } from '../services/freeTierQuota';
 
 
 interface OnboardingProps {
@@ -290,6 +291,7 @@ export default function Onboarding({
               >
                 <Text style={styles.secondaryButtonText}>Continue with Free Tier</Text>
               </TouchableOpacity>
+              <Text style={styles.freeTierCaption}>{FREE_TIER_COPY.short}</Text>
 
               <TouchableOpacity
                 style={styles.restoreButton}
@@ -644,6 +646,14 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 13,
     fontWeight: '500',
+  },
+  freeTierCaption: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
   },
   restoreButton: {
     paddingVertical: 6,

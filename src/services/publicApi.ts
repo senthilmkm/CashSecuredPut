@@ -5,6 +5,17 @@ import { BROKER_CONFIG } from '../config/broker';
 
 export { StockQuote, CSPOptionContract };
 
+function proxyRequestHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+  const proxyKey = process.env.EXPO_PUBLIC_PROXY_ACCESS_SECRET;
+  if (proxyKey) {
+    headers['x-proxy-key'] = proxyKey;
+  }
+  return headers;
+}
+
 /**
  * Fetches stock price quote from the GCP Cloud Function proxy (Public.com)
  */
@@ -19,9 +30,7 @@ export async function fetchStockQuoteFromProxy(
   const url = `${cleanProxyUrl}/quotes?symbol=${cleanSymbol}&accountId=${accountId}`;
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
+    headers: proxyRequestHeaders(),
   });
 
   let data: any;
@@ -63,9 +72,7 @@ export async function fetchPutOptionChainFromProxy(
   const url = `${cleanProxyUrl}/options?symbol=${cleanSymbol}&accountId=${accountId}&stockPrice=${stockPrice}&optionType=put${dteParam}`;
   const response = await fetch(url, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
+    headers: proxyRequestHeaders(),
   });
 
   let data: any;

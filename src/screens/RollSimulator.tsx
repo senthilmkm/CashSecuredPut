@@ -93,6 +93,9 @@ export default function RollSimulator({
 
   // Load option chain and auto-populate buyback price and new contract quotes
   const loadOptionChainData = async (tickerSym: string, stockNum: number, targetDteNum: number) => {
+    if (!isPremium) {
+      return;
+    }
     try {
       setFetchingLiveQuote(true);
       setFetchingCloseCost(true);
@@ -149,6 +152,9 @@ export default function RollSimulator({
 
   // Synchronizes live market quote when preset adjustments or DTE changes occur
   const syncLiveRollQuote = async (targetStrike: number, targetDte: number, message: string) => {
+    if (!isPremium) {
+      return;
+    }
     setIsSyncingRoll(true);
     setSyncingMessage(message);
     try {
@@ -265,8 +271,10 @@ export default function RollSimulator({
     setNewDte(initDte.toString());
 
     const stockNum = initialData?.stockPrice || initStrike;
-    loadOptionChainData(activeTicker, stockNum, initDte);
-  }, [initialData]);
+    if (isPremium) {
+      loadOptionChainData(activeTicker, stockNum, initDte);
+    }
+  }, [initialData, isPremium]);
 
   const handleSelectQuickTicker = (sym: string) => {
     Keyboard.dismiss();

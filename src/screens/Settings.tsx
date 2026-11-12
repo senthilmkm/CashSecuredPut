@@ -29,6 +29,7 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import { CSPTrade } from '../hooks/useAppStorage';
+import { FREE_TIER_COPY } from '../services/freeTierQuota';
 
 interface SettingsProps {
   isPremium: boolean;
@@ -41,6 +42,7 @@ interface SettingsProps {
   onClearData: () => void;
   onOpenPaywall: () => void;
   onReplayTour?: () => void;
+  showFreeTierNote?: boolean;
   navigation?: any;
 }
 
@@ -62,6 +64,10 @@ const FAQ_ITEMS = [
     q: 'How is the Health Scorecard calculated?',
     a: 'The Scorecard (0–100) evaluates Return on Capital (ROC %), Annualized APR/APY, Safety Cushion (Distance to Strike %), and Risk-Free Treasury Yield Spreads.',
   },
+  {
+    q: 'What does the free tier include?',
+    a: FREE_TIER_COPY.summary,
+  },
 ];
 
 export default function Settings({
@@ -75,6 +81,7 @@ export default function Settings({
   onClearData,
   onOpenPaywall,
   onReplayTour,
+  showFreeTierNote = false,
 }: SettingsProps) {
 
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
@@ -214,7 +221,7 @@ export default function Settings({
   const handleConfirmClearData = () => {
     Alert.alert(
       'Clear All Portfolio Data?',
-      'This will permanently delete all active trades and trade history from your device. This action cannot be undone.',
+      FREE_TIER_COPY.clearData,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -241,7 +248,7 @@ export default function Settings({
         <View style={{ flex: 1 }}>
           <Text style={styles.premiumTitle}>CashSecuredProfit {isPremium ? 'Pro' : 'Free Tier'}</Text>
           <Text style={styles.premiumDesc}>
-            {isPremium ? 'Unlimited Portfolio Tracking & Pro Tools Active' : 'Upgrade to Pro for unlimited trades, Wheel Suite & advanced tools.'}
+            {isPremium ? 'Unlimited Portfolio Tracking & Pro Tools Active' : showFreeTierNote ? FREE_TIER_COPY.settingsFree : 'Upgrade to Pro for unlimited trades, Wheel Suite & advanced tools.'}
           </Text>
         </View>
         {!isPremium && (

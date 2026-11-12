@@ -10,6 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FREE_TIER_COPY } from '../services/freeTierQuota';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   RotateCcw,
@@ -54,12 +55,17 @@ const STORAGE_KEY_WHEEL = '@csp_wheel_positions_v1';
 interface WheelHubProps {
   onOpenPaywall: () => void;
   isPremium: boolean;
+  wheelUsed?: boolean;
+  claimWheelSlot?: () => Promise<{ ok: boolean; paywall: boolean; message?: string }>;
+  onExistingWheel?: (count: number) => void;
+  existingSyncReady?: boolean;
 }
 
-export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
+export default function WheelHub({ onOpenPaywall, isPremium, wheelUsed = false, claimWheelSlot, onExistingWheel, existingSyncReady = false }: WheelHubProps) {
   const [positions, setPositions] = useState<WheelPosition[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [savingWheel, setSavingWheel] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<WheelPosition | null>(null);
 
   // Form states for new Wheel position
@@ -103,51 +109,32 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
     loadPositions();
   }, []);
 
+  useEffect(() => {
+    if (!loading && existingSyncReady && onExistingWheel) {
+      onExistingWheel(positions.length);
+    }
+  }, [loading, positions.length, existingSyncReady]);
+
   const loadPositions = async () => {
     try {
-      const initialized = await AsyncStorage.getItem('@csp_wheel_initialized');
       const json = await AsyncStorage.getItem(STORAGE_KEY_WHEEL);
+      let parsed: WheelPosition[] = [];
       if (json !== null) {
         try {
-          setPositions(JSON.parse(json));
+          const raw = JSON.parse(json);
+          parsed = Array.isArray(raw) ? raw : [];
         } catch (e) {
-          setPositions([]);
+          parsed = [];
         }
-      } else if (!initialized) {
-        // Populate sample Wheel position only on fresh first-ever install
-        const sample: WheelPosition[] = [
-          {
-            id: 'sample_1',
-            ticker: 'AAPL',
-            phase: 'covered_call',
-            initialStrike: 220,
-            initialPutPremium: 4.5,
-            shares: 100,
-            assignedDate: '2026-08-15',
-            assignedPrice: 220,
-            coveredCallsSold: [
-              {
-                id: 'cc_1',
-                strike: 225,
-                premium: 3.8,
-                dte: 24,
-                dateSold: '2026-09-01',
-                status: 'active',
-              },
-            ],
-            notes: 'CSP assigned at $220. Selling OTM covered calls to reduce cost basis.',
-          },
-        ];
-        setPositions(sample);
-        await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(sample)),
-          AsyncStorage.setItem('@csp_wheel_initialized', 'true'),
-        ]);
-      } else {
-        // Data was cleared or positions removed by user; maintain clean empty state
-        setPositions([]);
-        await AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify([]));
       }
+
+      // Drop the old first-launch AAPL sample so it cannot occupy the free slot.
+      const positionsWithoutSample = parsed.filter((position) => position?.id !== 'sample_1');
+      if (json === null || positionsWithoutSample.length !== parsed.length) {
+        await AsyncStorage.setItem(STORAGE_KEY_WHEEL, JSON.stringify(positionsWithoutSample));
+      }
+      await AsyncStorage.setItem('@csp_wheel_initialized', 'true');
+      setPositions(positionsWithoutSample);
     } catch (e) {
       console.warn('Failed to load wheel positions', e);
     } finally {
@@ -168,16 +155,15 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
   };
 
   const handleCreatePosition = async () => {
-    if (!isPremium && positions.length >= 1) {
+    if (savingWheel) {
+      return;
+    }
+    if (!isPremium && wheelUsed) {
       setModalVisible(false);
-      Alert.alert(
-        'Pro Feature Limit',
-        'Free tier allows 1 active Wheel strategy position. Upgrade to CSP Pro for unlimited Wheel positions & cycle tracking.',
-        [
-          { text: 'Unlock Pro', onPress: onOpenPaywall },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
+      Alert.alert(FREE_TIER_COPY.wheelTitle, FREE_TIER_COPY.wheelBody, [
+        { text: 'Unlock Pro', onPress: onOpenPaywall },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
       return;
     }
 
@@ -191,20 +177,45 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
       return;
     }
 
-    const newPos: WheelPosition = {
-      id: Date.now().toString(),
-      ticker: t,
-      phase: 'csp',
-      initialStrike: s,
-      initialPutPremium: p,
-      shares: sh,
-      coveredCallsSold: [],
-    };
+    setSavingWheel(true);
+    try {
+      if (!isPremium) {
+        if (!claimWheelSlot) {
+          Alert.alert('Save needs a connection', FREE_TIER_COPY.wheelOffline);
+          return;
+        }
+        const claim = await claimWheelSlot();
+        if (!claim.ok) {
+          if (claim.paywall) {
+            setModalVisible(false);
+            Alert.alert(FREE_TIER_COPY.wheelTitle, FREE_TIER_COPY.wheelBody, [
+              { text: 'Unlock Pro', onPress: onOpenPaywall },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          } else if (claim.message) {
+            Alert.alert('Save needs a connection', claim.message);
+          }
+          return;
+        }
+      }
 
-    const updated = [newPos, ...positions];
-    await savePositions(updated);
-    setModalVisible(false);
-    Alert.alert('Wheel Position Started!', `${t} Cash-Secured Put logged in Wheel Suite.`);
+      const newPos: WheelPosition = {
+        id: Date.now().toString(),
+        ticker: t,
+        phase: 'csp',
+        initialStrike: s,
+        initialPutPremium: p,
+        shares: sh,
+        coveredCallsSold: [],
+      };
+
+      const updated = [newPos, ...positions];
+      await savePositions(updated);
+      setModalVisible(false);
+      Alert.alert('Wheel Position Started!', `${t} Cash-Secured Put logged in Wheel Suite.`);
+    } finally {
+      setSavingWheel(false);
+    }
   };
 
   const handleTransitionToAssigned = async (pos: WheelPosition) => {
@@ -593,15 +604,11 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
           <TouchableOpacity
             style={styles.addBtn}
             onPress={() => {
-              if (!isPremium && positions.length >= 1) {
-                Alert.alert(
-                  'Pro Feature Limit',
-                  'Free tier allows 1 active Wheel strategy position. Upgrade to CSP Pro for unlimited Wheel positions & cycle tracking.',
-                  [
-                    { text: 'Unlock Pro', onPress: onOpenPaywall },
-                    { text: 'Cancel', style: 'cancel' }
-                  ]
-                );
+              if (!isPremium && wheelUsed) {
+                Alert.alert(FREE_TIER_COPY.wheelTitle, FREE_TIER_COPY.wheelBody, [
+                  { text: 'Unlock Pro', onPress: onOpenPaywall },
+                  { text: 'Cancel', style: 'cancel' },
+                ]);
                 return;
               }
               setModalVisible(true);
@@ -610,25 +617,23 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
           >
             {isPremium ? (
               <Plus size={16} color="#FFF" style={{ marginRight: 4 }} />
-            ) : positions.length >= 1 ? (
+            ) : wheelUsed ? (
               <Crown size={16} color="#F59E0B" style={{ marginRight: 4 }} />
             ) : (
               <Plus size={16} color="#FFF" style={{ marginRight: 4 }} />
             )}
-            <Text style={styles.addBtnText}>
-              {!isPremium && positions.length >= 1 ? 'Unlock Pro Wheel' : 'Start New Wheel'}
-            </Text>
+            <Text style={styles.addBtnText}>Start New Wheel</Text>
           </TouchableOpacity>
         </View>
 
         {/* Free Tier Wheel Capacity Banner */}
-        {!isPremium && positions.length >= 1 && (
+        {wheelUsed && (
           <TouchableOpacity style={styles.paywallBanner} onPress={onOpenPaywall} activeOpacity={0.85}>
             <LinearGradient colors={['#7C3AED', '#4C1D95']} style={styles.bannerGradient}>
               <Crown color="#F59E0B" size={24} style={{ marginRight: 12 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>Free Wheel Tier Limit Reached (1/1)</Text>
-                <Text style={styles.bannerSub}>Upgrade to Pro for unlimited concurrent Wheel cycles & multi-leg tracking.</Text>
+                <Text style={styles.bannerTitle}>{FREE_TIER_COPY.wheelTitle}</Text>
+                <Text style={styles.bannerSub}>{FREE_TIER_COPY.wheelBody}</Text>
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -642,7 +647,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
             <RotateCcw size={36} color="#64748B" style={{ marginBottom: 10 }} />
             <Text style={styles.emptyTitle}>No Active Wheel Strategy Positions</Text>
             <Text style={styles.emptySub}>
-              Start a Cash-Secured Put, track assignments, and automatically record Covered Calls to continuously lower your stock cost basis.
+              {wheelUsed ? FREE_TIER_COPY.wheelEmptyUsed : FREE_TIER_COPY.wheelEmptyOpen}
             </Text>
           </View>
         )}
@@ -710,7 +715,7 @@ export default function WheelHub({ onOpenPaywall, isPremium }: WheelHubProps) {
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleCreatePosition}>
+              <TouchableOpacity style={[styles.confirmBtn, savingWheel && { opacity: 0.7 }]} onPress={handleCreatePosition} disabled={savingWheel}>
                 <Text style={styles.confirmBtnText}>Create Wheel</Text>
               </TouchableOpacity>
             </View>

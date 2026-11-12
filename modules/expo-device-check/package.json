@@ -1,0 +1,11 @@
+{
+  "name": "expo-device-check",
+  "version": "1.0.0",
+  "description": "Apple DeviceCheck token for CashSecuredProfit free-tier reservations.",
+  "main": "index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

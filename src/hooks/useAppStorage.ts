@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { checkPremiumStatus } from '../services/purchases';
+import { useFreeTierQuota } from './useFreeTierQuota';
 import {
   CSPTrade,
   pruneHistoryByRetention,
@@ -126,14 +127,32 @@ export function useAppStorage() {
 
   // Full Pro access is granted exclusively via verified Apple StoreKit / RevenueCat Premium entitlement!
   const hasProAccess = isPremium;
+  const {
+    tradeUsed,
+    wheelUsed,
+    quotaReady,
+    claimTradeSlot,
+    claimWheelSlot,
+    noteExisting,
+  } = useFreeTierQuota(isPremium, loading);
+
+  useEffect(() => {
+    if (loading || isPremium || trades.length + history.length === 0) {
+      return;
+    }
+    noteExisting('trade', trades.length + history.length).catch(() => undefined);
+  }, [loading, isPremium, trades.length, history.length, noteExisting]);
 
   /**
-   * Adds a new trade to active trades portfolio.
-   * Gated after 7-Day Trial expires AND Free Tier 3-trade limit reached!
+   * Adds a new trade. Free tier can save one trade per device, ever.
    */
-  const addTrade = async (newTradeData: Omit<CSPTrade, 'id' | 'createdAt' | 'status'>): Promise<{ success: boolean; paywallTriggered?: boolean }> => {
-    if (!hasProAccess && trades.length >= FREE_TIER_MAX_TRADES) {
-      return { success: false, paywallTriggered: true };
+  const addTrade = async (newTradeData: Omit<CSPTrade, 'id' | 'createdAt' | 'status'>): Promise<{ success: boolean; paywallTriggered?: boolean; message?: string }> => {
+    const claim = await claimTradeSlot();
+    if (!claim.ok) {
+      if (claim.paywall) {
+        return { success: false, paywallTriggered: true };
+      }
+      return { success: false, message: claim.message };
     }
 
     const newTrade: CSPTrade = {
@@ -145,8 +164,17 @@ export function useAppStorage() {
     };
 
     const updatedTrades = [newTrade, ...trades];
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.TRADES, JSON.stringify(updatedTrades));
+    } catch {
+      return {
+        success: false,
+        message: hasProAccess
+          ? 'Could not save this trade on your device. Please try again.'
+          : 'Could not save this trade on your device. Your free save stays reserved.',
+      };
+    }
     setTrades(updatedTrades);
-    await AsyncStorage.setItem(STORAGE_KEYS.TRADES, JSON.stringify(updatedTrades));
 
     return { success: true };
   };
@@ -280,6 +308,11 @@ export function useAppStorage() {
     trialDaysRemaining,
     hasProAccess,
     loading,
+    tradeUsed,
+    wheelUsed,
+    quotaReady,
+    claimWheelSlot,
+    noteExisting,
     hasCompletedOnboarding,
     completeOnboarding,
     retentionDays,

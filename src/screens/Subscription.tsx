@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Crown, X, Shield, RefreshCw, Zap, TrendingUp, Sparkles, FileText } from 'lucide-react-native';
+import { FREE_TIER_COPY } from '../services/freeTierQuota';
 import {
   purchasePremiumPlan,
   restorePremiumPurchases,
@@ -136,8 +137,9 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
 
           <Text style={styles.heroTitle}>Unlock CashSecuredProfit Pro</Text>
           <Text style={styles.heroSubtitle}>
-            Try 7 days free. Maximize your options yield & master The Wheel strategy with zero risk. Cancel anytime.
+            Try 7 days free. Maximize your options yield and master The Wheel strategy. Cancel anytime.
           </Text>
+          <Text style={styles.freeTierLine}>{FREE_TIER_COPY.summary}</Text>
         </View>
 
         {/* Feature Highlights */}
@@ -148,7 +150,7 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
             </View>
             <View style={styles.featureTextCol}>
               <Text style={styles.featureTitle}>Unlimited Portfolio Tracking</Text>
-              <Text style={styles.featureDesc}>Store and manage unlimited active CSP positions (Free tier limited to 1 active trade).</Text>
+              <Text style={styles.featureDesc}>Store and manage unlimited CSP positions. Free tier includes 1 saved trade on this device. Deleting it does not unlock another.</Text>
             </View>
           </View>
 
@@ -168,7 +170,7 @@ export default function Subscription({ onClose, onSuccess }: SubscriptionProps) 
             </View>
             <View style={styles.featureTextCol}>
               <Text style={styles.featureTitle}>The Wheel Strategy Suite</Text>
-              <Text style={styles.featureDesc}>Track unlimited active Wheel positions & auto-calculate net stock cost basis on assignment.</Text>
+              <Text style={styles.featureDesc}>Track unlimited Wheel positions and cost basis. Free tier includes 1 saved wheel on this device. Deleting it does not unlock another.</Text>
             </View>
           </View>
 
@@ -332,6 +334,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 12,
+  },
+  freeTierLine: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    textAlign: 'center',
+    lineHeight: 17,
+    marginTop: 10,
+    paddingHorizontal: 8,
   },
   featuresContainer: {
     backgroundColor: '#161E2E',

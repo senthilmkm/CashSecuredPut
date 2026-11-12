@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -24,6 +24,7 @@ import GuideCenter from './src/screens/GuideCenter';
 import Settings from './src/screens/Settings';
 import Subscription from './src/screens/Subscription';
 import Onboarding from './src/screens/Onboarding';
+import { FREE_TIER_COPY } from './src/services/freeTierQuota';
 
 // Silence foreground notifications while using app
 Notifications.setNotificationHandler({
@@ -37,6 +38,7 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'analyzer' | 'wheel' | 'portfolio' | 'guides' | 'roll' | 'settings'>('analyzer');
+  const wheelTransitionLock = useRef(false);
   const [showPaywall, setShowPaywall] = useState<boolean>(false);
   const [showReplayTour, setShowReplayTour] = useState<boolean>(false);
   const [activeRollData, setActiveRollData] = useState<any>(null);
@@ -49,6 +51,11 @@ export default function App() {
     trialDaysRemaining,
     hasProAccess,
     loading,
+    tradeUsed,
+    wheelUsed,
+    quotaReady,
+    claimWheelSlot,
+    noteExisting,
     hasCompletedOnboarding,
     completeOnboarding,
     retentionDays,
@@ -134,28 +141,69 @@ export default function App() {
     };
   }, [loading, trades, expirationAlertThreshold, hasProAccess]);
 
+  useEffect(() => {
+    if (loading || hasProAccess) {
+      return;
+    }
+    let cancelled = false;
+    AsyncStorage.getItem('@csp_wheel_positions_v1')
+      .then((json) => {
+        if (cancelled || !json) {
+          return;
+        }
+        const parsed = JSON.parse(json);
+        const savedWheels = Array.isArray(parsed) ? parsed.filter((item) => item?.id !== 'sample_1') : [];
+        if (savedWheels.length > 0) {
+          noteExisting('wheel', savedWheels.length).catch(() => undefined);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, hasProAccess, noteExisting]);
+
   const handleOpenRollWithData = (tradeData: any) => {
     setActiveRollData(tradeData);
     setCurrentTab('roll');
   };
 
   const handleTransitionTradeToWheel = async (tradeData: { ticker: string; strike: number; premium: number; shares: number }) => {
+    if (wheelTransitionLock.current) {
+      return;
+    }
+    wheelTransitionLock.current = true;
+    let reservedFreeWheel = false;
     try {
       const STORAGE_KEY_WHEEL = '@csp_wheel_positions_v1';
       const existing = await AsyncStorage.getItem(STORAGE_KEY_WHEEL);
-      const list = existing ? JSON.parse(existing) : [];
-      
-      if (!hasProAccess && list.length >= 1) {
-        setShowPaywall(true);
-        Alert.alert(
-          'Pro Feature Limit',
-          'Free tier allows 1 active Wheel strategy position. Upgrade to CSP Pro to transition unlimited assigned trades into Wheel management.',
-          [
+      const parsed = existing ? JSON.parse(existing) : [];
+      const list = Array.isArray(parsed) ? parsed.filter((item) => item?.id !== 'sample_1') : [];
+
+      if (!hasProAccess) {
+        if (list.length > 0) {
+          noteExisting('wheel', list.length).catch(() => undefined);
+          setShowPaywall(true);
+          Alert.alert(FREE_TIER_COPY.wheelTitle, FREE_TIER_COPY.wheelBody, [
             { text: 'Unlock Pro', onPress: () => setShowPaywall(true) },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
-        return;
+            { text: 'Cancel', style: 'cancel' },
+          ]);
+          return;
+        }
+        const claim = await claimWheelSlot();
+        if (!claim.ok) {
+          if (claim.paywall) {
+            setShowPaywall(true);
+            Alert.alert(FREE_TIER_COPY.wheelTitle, FREE_TIER_COPY.wheelBody, [
+              { text: 'Unlock Pro', onPress: () => setShowPaywall(true) },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          } else if (claim.message) {
+            Alert.alert('Save needs a connection', claim.message);
+          }
+          return;
+        }
+        reservedFreeWheel = true;
       }
 
       const newWheelPos = {
@@ -176,7 +224,12 @@ export default function App() {
       setCurrentTab('wheel');
     } catch (e) {
       console.warn('Failed to transition trade to wheel', e);
+      if (reservedFreeWheel) {
+        Alert.alert('Could not save this wheel', 'Your free wheel stays reserved on this device.');
+      }
       setCurrentTab('wheel');
+    } finally {
+      wheelTransitionLock.current = false;
     }
   };
 
@@ -240,6 +293,7 @@ export default function App() {
             onOpenRollSim={handleOpenRollWithData}
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
+            showFreeTierNote={!loading && !hasProAccess}
             savedTradesCount={trades.length}
           />
         )}
@@ -248,6 +302,14 @@ export default function App() {
           <WheelHub
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
+            wheelUsed={quotaReady && !loading && !hasProAccess && wheelUsed}
+            claimWheelSlot={claimWheelSlot}
+            existingSyncReady={!loading}
+            onExistingWheel={(count) => {
+              if (!hasProAccess && count > 0) {
+                noteExisting('wheel', count).catch(() => undefined);
+              }
+            }}
           />
         )}
 
@@ -262,6 +324,7 @@ export default function App() {
             onTransitionToWheel={handleTransitionTradeToWheel}
             onOpenPaywall={() => setShowPaywall(true)}
             isPremium={hasProAccess}
+            tradeSlotUsed={quotaReady && !loading && !hasProAccess && tradeUsed}
           />
         )}
 
@@ -299,6 +362,7 @@ export default function App() {
             onClearData={clearAllData}
             onOpenPaywall={() => setShowPaywall(true)}
             onReplayTour={() => setShowReplayTour(true)}
+            showFreeTierNote={!loading && !hasProAccess}
           />
         )}
       </View>

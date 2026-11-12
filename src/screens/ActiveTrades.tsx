@@ -35,7 +35,8 @@ import {
   TrendingUp,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CSPTrade, FREE_TIER_MAX_TRADES, FREE_TIER_MAX_HISTORY } from '../hooks/useAppStorage';
+import { CSPTrade, FREE_TIER_MAX_HISTORY } from '../hooks/useAppStorage';
+import { FREE_TIER_COPY } from '../services/freeTierQuota';
 import { exportPortfolioPDF, exportPortfolioCSV, calculateDaysRemaining } from '../services/exportService';
 import { getMarketQuote } from '../services/publicApi';
 import { checkEarningsRisk } from '../services/earningsService';
@@ -52,6 +53,7 @@ interface ActiveTradesProps {
   onTransitionToWheel?: (tradeData: { ticker: string; strike: number; premium: number; shares: number }) => void;
   onOpenPaywall: () => void;
   isPremium: boolean;
+  tradeSlotUsed?: boolean;
 }
 
 export default function ActiveTrades({
@@ -64,6 +66,7 @@ export default function ActiveTrades({
   onTransitionToWheel,
   onOpenPaywall,
   isPremium,
+  tradeSlotUsed = false,
 }: ActiveTradesProps) {
 
   const [viewMode, setViewMode] = useState<'active' | 'history' | 'analytics'>('active');
@@ -137,9 +140,10 @@ export default function ActiveTrades({
 
   const getTradeStockPrice = (t: CSPTrade) => liveQuotes[t.ticker]?.price ?? t.stockPrice;
 
+  const countedHistory = isPremium ? history : history.slice(0, FREE_TIER_MAX_HISTORY);
   const totalCollateral = trades.reduce((sum, t) => sum + t.strikePrice * 100 * t.contracts, 0);
   const totalPremium = trades.reduce((sum, t) => sum + t.premium * 100 * t.contracts - t.commissions, 0);
-  const totalLifetimeRealized = history.reduce((sum, t) => sum + ((t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) * 100 * t.contracts - t.commissions), 0);
+  const totalLifetimeRealized = countedHistory.reduce((sum, t) => sum + ((t.cumulativePremium !== undefined ? t.cumulativePremium : t.premium) * 100 * t.contracts - t.commissions), 0);
   const itmCount = trades.filter((t) => t.strikePrice > getTradeStockPrice(t)).length;
 
   const filteredTrades = trades.filter((t) => {
@@ -243,7 +247,7 @@ export default function ActiveTrades({
           >
             <Clock size={13} color={viewMode === 'history' ? '#FFF' : '#64748B'} style={{ marginRight: 5 }} />
             <Text style={[styles.segmentText, viewMode === 'history' && styles.segmentTextActive]}>
-              History ({history.length})
+              History ({countedHistory.length})
             </Text>
           </TouchableOpacity>
 
@@ -314,14 +318,14 @@ export default function ActiveTrades({
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Lifetime Realized Income</Text>
             <Text style={styles.overviewValSuccess}>+${totalLifetimeRealized.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-            <Text style={styles.overviewSub}>From {history.length} Completed Trades</Text>
+            <Text style={styles.overviewSub}>From {countedHistory.length} Completed Trades</Text>
           </View>
 
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Completed Positions</Text>
-            <Text style={styles.overviewValPrimary}>{history.length}</Text>
+            <Text style={styles.overviewValPrimary}>{countedHistory.length}</Text>
             <Text style={styles.overviewSub}>
-              {history.filter(h => h.status === 'expired_worthless').length} Expired Worthless
+              {countedHistory.filter(h => h.status === 'expired_worthless').length} Expired Worthless
             </Text>
           </View>
         </View>
@@ -350,13 +354,13 @@ export default function ActiveTrades({
 
 
       {/* Free Tier Limit Warning Banner */}
-      {!isPremium && trades.length >= FREE_TIER_MAX_TRADES && viewMode === 'active' && (
+      {tradeSlotUsed && viewMode === 'active' && (
         <TouchableOpacity style={styles.paywallBanner} onPress={onOpenPaywall} activeOpacity={0.85}>
           <LinearGradient colors={['#7C3AED', '#4C1D95']} style={styles.bannerGradient}>
             <Crown color="#F59E0B" size={24} style={{ marginRight: 12 }} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.bannerTitle}>Free Tier Limit Reached ({trades.length}/{FREE_TIER_MAX_TRADES} Active)</Text>
-              <Text style={styles.bannerSub}>Upgrade to Pro for unlimited simultaneous trades & automated expiration alerts.</Text>
+              <Text style={styles.bannerTitle}>{FREE_TIER_COPY.tradeTitle}</Text>
+              <Text style={styles.bannerSub}>{FREE_TIER_COPY.tradeBody}</Text>
             </View>
           </LinearGradient>
         </TouchableOpacity>
@@ -366,7 +370,7 @@ export default function ActiveTrades({
       {viewMode === 'analytics' ? (
         <View style={{ marginTop: 4 }}>
           <MonthlyIncomeChart
-            history={history}
+            history={countedHistory}
             isPremium={isPremium}
             onOpenPaywall={onOpenPaywall}
             annualGoal={annualGoal}
@@ -378,18 +382,18 @@ export default function ActiveTrades({
             <View style={styles.analyticsStatCard}>
               <Text style={styles.analyticsStatLabel}>Lifetime Realized</Text>
               <Text style={styles.analyticsStatValGreen}>+${totalLifetimeRealized.toFixed(2)}</Text>
-              <Text style={styles.analyticsStatSub}>{history.length} Closed Trades</Text>
+              <Text style={styles.analyticsStatSub}>{countedHistory.length} Closed Trades</Text>
             </View>
 
             <View style={styles.analyticsStatCard}>
               <Text style={styles.analyticsStatLabel}>Win Rate (% Expired)</Text>
               <Text style={styles.analyticsStatValPrimary}>
-                {history.length > 0
-                  ? `${Math.round((history.filter(h => h.status === 'expired_worthless').length / history.length) * 100)}%`
+                {countedHistory.length > 0
+                  ? `${Math.round((countedHistory.filter(h => h.status === 'expired_worthless').length / countedHistory.length) * 100)}%`
                   : '100%'}
               </Text>
               <Text style={styles.analyticsStatSub}>
-                {history.filter(h => h.status === 'expired_worthless').length} Expired Worthless
+                {countedHistory.filter(h => h.status === 'expired_worthless').length} Expired Worthless
               </Text>
             </View>
           </View>
@@ -408,14 +412,14 @@ export default function ActiveTrades({
       ) : viewMode === 'history' ? (
         <>
           <MonthlyIncomeChart
-            history={history}
+            history={countedHistory}
             isPremium={isPremium}
             onOpenPaywall={onOpenPaywall}
             annualGoal={annualGoal}
             onUpdateGoal={handleUpdateGoal}
           />
 
-          {history.length === 0 ? (
+          {countedHistory.length === 0 ? (
             <View style={styles.emptyCard}>
               <Clock color="#475569" size={48} style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>No Trade History Yet</Text>
@@ -425,7 +429,7 @@ export default function ActiveTrades({
             </View>
           ) : (
             <>
-              {(isPremium ? history : history.slice(0, FREE_TIER_MAX_HISTORY)).map((hTrade) => {
+              {countedHistory.map((hTrade) => {
                 const hPrem = hTrade.cumulativePremium !== undefined ? hTrade.cumulativePremium : hTrade.premium;
                 const netIncome = (hPrem * 100 * hTrade.contracts - hTrade.commissions).toFixed(2);
                 const effBasis = Math.max(0, hTrade.strikePrice - (hTrade.cumulativeCostBasisCredit || hPrem)).toFixed(2);
@@ -497,7 +501,7 @@ export default function ActiveTrades({
                       +{history.length - FREE_TIER_MAX_HISTORY} More Closed Trade{history.length - FREE_TIER_MAX_HISTORY !== 1 ? 's' : ''} Saved
                     </Text>
                     <Text style={styles.historyPaywallSub}>
-                      Free tier displays your {FREE_TIER_MAX_HISTORY} most recent closed trades. Upgrade to Pro for complete lifetime trade journaling and PDF/CSV exports.
+                      {FREE_TIER_COPY.historyLocked}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -572,7 +576,9 @@ export default function ActiveTrades({
               <Text style={styles.emptyTitle}>No Active CSP Positions</Text>
               <Text style={styles.emptySub}>
                 {trades.length === 0
-                  ? 'Use the Analyzer tab to calculate and save your first Cash-Secured Put trade.'
+                  ? tradeSlotUsed
+                    ? FREE_TIER_COPY.tradeEmptyUsed
+                    : 'Use the Analyzer tab to calculate and save your first Cash-Secured Put trade.'
                   : 'No trades match the selected filter.'}
               </Text>
             </View>

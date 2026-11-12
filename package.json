@@ -9,6 +9,7 @@
     "expo-build-properties": "~57.0.21",
     "expo-constants": "~57.0.19",
     "expo-dev-client": "~57.0.5",
+    "expo-device-check": "file:modules/expo-device-check",
     "expo-file-system": "^57.0.0",
     "expo-image-picker": "~57.0.19",
     "expo-linear-gradient": "~57.0.0",
@@ -39,5 +40,10 @@
     "web": "expo start --web",
     "test": "npx tsx src/__tests__/run-tests.ts"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "nativeModulesDir": "./modules"
+    }
+  }
 }

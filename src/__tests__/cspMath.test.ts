@@ -11,6 +11,7 @@ import {
 import { checkEarningsRisk } from '../services/earningsService';
 import { getMarketSessionStatus } from '../services/marketHours';
 import { isCustomerEntitled } from '../services/entitlementUtils';
+import { decideClaim, emptyFlags } from '../services/freeTierQuota';
 
 import { groupTradesByMonth, calculateGoalPacing } from '../services/incomeAnalytics';
 import pricingConfig from '../constants/pricing.json';
@@ -219,9 +220,9 @@ export function runCSPMathTests() {
   // Test 11: RevenueCat Entitlement Matching Resilience
   assert(isCustomerEntitled({ entitlements: { active: { Premium: {} } } }) === true, 'Matches exact "Premium" entitlement');
   assert(isCustomerEntitled({ entitlements: { active: { premium: {} } } }) === true, 'Matches lowercase "premium" entitlement');
-  assert(isCustomerEntitled({ entitlements: { active: { pro: {} } } }) === true, 'Matches "pro" entitlement alias');
-  assert(isCustomerEntitled({ entitlements: { active: { csp_premium: {} } } }) === true, 'Matches "csp_premium" alias');
-  assert(isCustomerEntitled({ entitlements: { active: { custom_any_tier: {} } } }) === true, 'Matches any active RevenueCat subscription key');
+  assert(isCustomerEntitled({ entitlements: { active: { pro: {} } } }) === false, 'Rejects a non-Premium entitlement alias');
+  assert(isCustomerEntitled({ entitlements: { active: { csp_premium: {} } } }) === false, 'Rejects a differently named premium alias');
+  assert(isCustomerEntitled({ entitlements: { active: { custom_any_tier: {} } } }) === false, 'Rejects any other active RevenueCat entitlement');
   assert(isCustomerEntitled({ entitlements: { active: {} } }) === false, 'Returns false for empty active entitlements');
   assert(isCustomerEntitled(null) === false, 'Returns false for null customerInfo safely');
 
@@ -438,6 +439,8 @@ export function runCSPMathTests() {
   assert(FREE_TIER_MAX_TRADES === 1, 'FREE_TIER_MAX_TRADES is tightened to 1');
   assert(FREE_TIER_MAX_HISTORY === 3, 'FREE_TIER_MAX_HISTORY is capped at 3');
   assert(pricingConfig.freeTier.maxSavedTrades === 1, 'pricing.json maxSavedTrades is 1');
+  assert(pricingConfig.freeTier.maxSavedWheels === 1, 'pricing.json maxSavedWheels is 1');
+  assert(pricingConfig.freeTier.lifetimePerDevice === true, 'pricing.json free saves last for the life of the device');
   assert(pricingConfig.freeTier.maxHistoryTrades === 3, 'pricing.json maxHistoryTrades is 3');
   assert(pricingConfig.freeTier.allowExpirationAlerts === false, 'pricing.json allowExpirationAlerts is false');
 
@@ -490,21 +493,20 @@ export function runCSPMathTests() {
   assert(negRoll.netCreditOrDebit === 0, 'Zero contracts roll returns 0 net credit');
   assert(negRoll.collateralDifference === 0, 'Zero contracts roll collateral difference is 0');
 
-  // Test 23: Free Tier vs Pro Gate Logic Simulation
-  const simulateAddTrade = (currentCount: number, isPro: boolean) => {
-    return (!isPro && currentCount >= FREE_TIER_MAX_TRADES) ? { allowed: false, paywall: true } : { allowed: true, paywall: false };
-  };
-  assert(simulateAddTrade(0, false).allowed === true, 'Free user can add 1st trade');
-  assert(simulateAddTrade(1, false).allowed === false, 'Free user blocked on 2nd trade');
-  assert(simulateAddTrade(1, false).paywall === true, 'Free user triggers paywall on 2nd trade');
-  assert(simulateAddTrade(10, true).allowed === true, 'Pro user can add unlimited trades');
-
-  const simulateWheelTransition = (wheelCount: number, isPro: boolean) => {
-    return (!isPro && wheelCount >= 1) ? { allowed: false, paywall: true } : { allowed: true, paywall: false };
-  };
-  assert(simulateWheelTransition(0, false).allowed === true, 'Free user can start 1st Wheel position');
-  assert(simulateWheelTransition(1, false).allowed === false, 'Free user blocked on 2nd Wheel position');
-  assert(simulateWheelTransition(5, true).allowed === true, 'Pro user can manage unlimited Wheel positions');
+  // Test 23: Free tier is one save per device, and Pro is unlimited
+  const openFlags = emptyFlags();
+  const firstTrade = decideClaim({ isPremium: false, flags: openFlags, slot: 'trade', deviceCheckAvailable: false, serverResult: null });
+  assert(firstTrade.ok === true, 'Free user can save the first trade');
+  assert(firstTrade.nextFlags.tradeUsed === true, 'First free trade marks the device slot used');
+  const secondTrade = decideClaim({ isPremium: false, flags: firstTrade.nextFlags, slot: 'trade', deviceCheckAvailable: false, serverResult: null });
+  assert(secondTrade.ok === false && secondTrade.paywall === true, 'Deleting the trade does not unlock another free trade');
+  const proTrade = decideClaim({ isPremium: true, flags: firstTrade.nextFlags, slot: 'trade', deviceCheckAvailable: true, serverResult: null });
+  assert(proTrade.ok === true && proTrade.paywall === false, 'Pro user can save trades after the free slot is used');
+  const firstWheel = decideClaim({ isPremium: false, flags: openFlags, slot: 'wheel', deviceCheckAvailable: false, serverResult: null });
+  assert(firstWheel.ok === true && firstWheel.nextFlags.wheelUsed === true, 'Free user can save the first wheel');
+  const secondWheel = decideClaim({ isPremium: false, flags: firstWheel.nextFlags, slot: 'wheel', deviceCheckAvailable: false, serverResult: null });
+  assert(secondWheel.paywall === true, 'Deleting the wheel does not unlock another free wheel');
+  assert(FREE_TIER_MAX_TRADES === 1, 'Free trade allowance constant stays at 1');
 
   // Test 24: Onboarding State Machine & Edge Cases
   assert(STORAGE_KEY_ONBOARDING === '@csp_onboarding_completed_v1', 'Onboarding key matches v1 schema');

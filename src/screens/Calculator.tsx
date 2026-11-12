@@ -27,16 +27,18 @@ import {
 } from 'lucide-react-native';
 import { calculateCSPMetrics, CSPTradeMetrics } from '../services/cspMath';
 import { getMarketQuote, getPutOptionChain, CSPOptionContract } from '../services/publicApi';
+import { FREE_TIER_COPY } from '../services/freeTierQuota';
 import { checkEarningsRisk, EarningsRiskResult } from '../services/earningsService';
 import { getMarketSessionStatus } from '../services/marketHours';
 import PayoffChart from '../components/PayoffChart';
 
 
 interface CalculatorProps {
-  onSaveTrade: (tradeData: any) => Promise<{ success: boolean; paywallTriggered?: boolean }>;
+  onSaveTrade: (tradeData: any) => Promise<{ success: boolean; paywallTriggered?: boolean; message?: string }>;
   onOpenRollSim: (tradeData: any) => void;
   onOpenPaywall: () => void;
   isPremium: boolean;
+  showFreeTierNote?: boolean;
   savedTradesCount: number;
 }
 
@@ -45,6 +47,7 @@ export default function Calculator({
   onOpenRollSim,
   onOpenPaywall,
   isPremium,
+  showFreeTierNote = false,
   savedTradesCount,
 }: CalculatorProps) {
   const [ticker, setTicker] = useState('AAPL');
@@ -65,6 +68,7 @@ export default function Calculator({
   const [selectedContract, setSelectedContract] = useState<CSPOptionContract | null>(null);
   const [selectedExpFilter, setSelectedExpFilter] = useState<string>('all');
   const [metrics, setMetrics] = useState<CSPTradeMetrics | null>(null);
+  const [savingPosition, setSavingPosition] = useState(false);
   const [marketStatusTimestamp, setMarketStatusTimestamp] = useState<number>(Date.now());
   const marketStatus = useMemo(() => getMarketSessionStatus(), [marketStatusTimestamp]);
 
@@ -203,10 +207,10 @@ export default function Calculator({
     setMetrics(res);
   }, [stockPrice, strikePrice, premium, contracts, dte, commissions, customIv, earningsRisk]);
 
-  // Initial quote fetch on mount
+  // Refetch once premium status is known so a Pro user still gets the chain after launch.
   useEffect(() => {
     handleFetchQuote();
-  }, []);
+  }, [isPremium]);
 
   const handleFetchQuote = async (symbolOverride?: string) => {
     Keyboard.dismiss();
@@ -222,7 +226,16 @@ export default function Calculator({
       const quote = await getMarketQuote(cleanSymbol);
       if (reqId !== quoteRequestId.current || !isMountedRef.current) return;
       setStockPrice(quote.price.toFixed(2));
-      
+
+      if (!isPremium) {
+        setOptionChain([]);
+        setSelectedContract(null);
+        setIsSimulatedData(!!quote?.isMocked);
+        const manualDte = parseInt(dte, 10) || 30;
+        setEarningsRisk(checkEarningsRisk(cleanSymbol, manualDte));
+        return;
+      }
+
       const targetStrike = Math.round(quote.price * 0.95);
       setStrikePrice(targetStrike.toFixed(2));
 
@@ -287,6 +300,11 @@ export default function Calculator({
   };
 
   const fetchChainForTargetDte = async (targetDteNum: number) => {
+    if (!isPremium) {
+      setIsSyncingDte(false);
+      return;
+    }
+
     const cleanSymbol = ticker.trim().toUpperCase();
     if (!cleanSymbol) {
       setIsSyncingDte(false);
@@ -358,6 +376,10 @@ export default function Calculator({
     }
 
     const parsed = parseInt(text, 10);
+    if (!isPremium) {
+      setIsSyncingDte(false);
+      return;
+    }
     if (!isNaN(parsed) && parsed >= 0) {
       setIsSyncingDte(true);
       dteTimeoutRef.current = setTimeout(() => {
@@ -393,6 +415,9 @@ export default function Calculator({
   };
 
   const handleSavePosition = async () => {
+    if (savingPosition) {
+      return;
+    }
     if (!metrics || metrics.collateralRequired === 0) {
       Alert.alert('Invalid Trade', 'Please enter valid stock price, strike, and premium before saving.');
       return;
@@ -404,6 +429,7 @@ export default function Calculator({
       : new Date(Date.now() + (parseInt(dte, 10) || 30) * 86400000).toISOString().split('T')[0];
 
     const executeSave = async () => {
+      setSavingPosition(true);
       const tradeData = {
         ticker: ticker.trim().toUpperCase(),
         stockPrice: parseFloat(stockPrice),
@@ -415,11 +441,17 @@ export default function Calculator({
         commissions: parseFloat(commissions) || 0,
       };
 
-      const result = await onSaveTrade(tradeData);
-      if (result.paywallTriggered) {
-        onOpenPaywall();
-      } else if (result.success) {
-        Alert.alert('Trade Saved!', `${tradeData.ticker} Put option saved to your portfolio.`);
+      try {
+        const result = await onSaveTrade(tradeData);
+        if (result.paywallTriggered) {
+          onOpenPaywall();
+        } else if (result.message) {
+          Alert.alert('Save needs a connection', result.message);
+        } else if (result.success) {
+          Alert.alert('Trade Saved!', `${tradeData.ticker} Put option saved to your portfolio.`);
+        }
+      } finally {
+        setSavingPosition(false);
       }
     };
 
@@ -763,7 +795,7 @@ export default function Calculator({
 
         {/* 4. PRIMARY ACTION BUTTONS */}
         <View style={styles.actionButtonsRow}>
-          <TouchableOpacity style={styles.saveTradeBtn} onPress={handleSavePosition} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.saveTradeBtn, savingPosition && { opacity: 0.7 }]} onPress={handleSavePosition} disabled={savingPosition} activeOpacity={0.85}>
             <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
               <Plus color="#FFF" size={18} style={{ marginRight: 6 }} />
               <Text style={styles.btnText}>Save Position</Text>
@@ -786,6 +818,9 @@ export default function Calculator({
             <Text style={styles.rollBtnText}>Roll Simulator</Text>
           </TouchableOpacity>
         </View>
+        {showFreeTierNote ? (
+          <Text style={styles.freeTierNote}>{FREE_TIER_COPY.calculatorNote}</Text>
+        ) : null}
 
         {/* 5. EXPANDABLE "TRADE DETAILS, GREEKS & MANUAL ADJUSTMENTS" TRAY */}
         <View style={styles.advancedDrawerCard}>
@@ -1410,6 +1445,13 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     fontSize: 12.5,
     fontWeight: '700',
+  },
+  freeTierNote: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 8,
+    marginBottom: 4,
   },
   actionButtonsRow: {
     flexDirection: 'row',

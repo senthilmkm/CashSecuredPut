@@ -1,16 +1,44 @@
+const crypto = require('crypto');
 const fetch = require('node-fetch');
+const { isFreeTierRoute, serveFreeTier } = require('./deviceCheck');
 
 const PUBLIC_COM_BASE_URL = 'https://api.public.com';
+
+function hasValidProxyKey(req) {
+  const expected = process.env.PROXY_ACCESS_SECRET || '';
+  const provided = req.get('x-proxy-key') || '';
+  if (!expected || !provided) {
+    return false;
+  }
+
+  const expectedBuf = Buffer.from(expected);
+  const providedBuf = Buffer.from(provided);
+  if (expectedBuf.length !== providedBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuf, providedBuf);
+}
 
 exports.handler = async (req, res) => {
   // Set CORS headers
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, x-proxy-key');
 
   // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     res.status(204).send('');
+    return;
+  }
+
+  if (isFreeTierRoute(req.path || req.url)) {
+    await serveFreeTier(req, res, process.env, fetch);
+    return;
+  }
+
+  if (!hasValidProxyKey(req)) {
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
 

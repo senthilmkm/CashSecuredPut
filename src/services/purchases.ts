@@ -1,6 +1,5 @@
 import { Platform } from 'react-native';
 import Purchases, { PurchasesPackage, PurchasesStoreProduct } from 'react-native-purchases';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 const REVENUECAT_API_KEYS = {
@@ -15,7 +14,6 @@ export const PRODUCT_IDS = {
 
 import { ENTITLEMENT_ID, isCustomerEntitled } from './entitlementUtils';
 export { ENTITLEMENT_ID, isCustomerEntitled };
-const STORAGE_KEY = '@CashSecuredProfit:is_premium';
 
 let isPurchasesConfigured = false;
 
@@ -53,29 +51,20 @@ export async function initializePurchases(): Promise<boolean> {
  */
 export async function checkPremiumStatus(): Promise<boolean> {
   if (Platform.OS === 'web' || isExpoGo) {
-    const cached = await AsyncStorage.getItem(STORAGE_KEY);
-    return cached === 'true';
+    return false;
   }
 
   try {
     const configured = await initializePurchases();
     if (!configured) {
-      const cached = await AsyncStorage.getItem(STORAGE_KEY);
-      return cached === 'true';
+      return false;
     }
 
     const customerInfo = await Purchases.getCustomerInfo();
-    const isActive = isCustomerEntitled(customerInfo);
-    await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
-    return isActive;
+    return isCustomerEntitled(customerInfo);
   } catch (error) {
     console.error('[Purchases] Error checking customer info:', error);
-    try {
-      const cachedValue = await AsyncStorage.getItem(STORAGE_KEY);
-      return cachedValue === 'true';
-    } catch (e) {
-      return false;
-    }
+    return false;
   }
 }
 
@@ -186,9 +175,7 @@ export async function getSubscriptionPlans(): Promise<AvailablePlans> {
  */
 export async function purchasePremiumPlan(planId: string): Promise<boolean> {
   if (Platform.OS === 'web' || isExpoGo) {
-    // Development fallback toggle for Web & Expo Go
-    await AsyncStorage.setItem(STORAGE_KEY, 'true');
-    return true;
+    throw new Error('Subscriptions can only be purchased in the App Store version of this app.');
   }
 
   try {
@@ -231,9 +218,7 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
         if (pkg) {
           console.log('[Purchases] Launching Apple StoreKit purchase for package:', pkg.identifier);
           const { customerInfo } = await Purchases.purchasePackage(pkg);
-          const isActive = isCustomerEntitled(customerInfo);
-          await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
-          return isActive;
+          return isCustomerEntitled(customerInfo);
         }
       }
     } catch (offeringPurchaseErr: any) {
@@ -260,9 +245,7 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
       if (productToPurchase) {
         console.log('[Purchases] Launching Apple StoreKit direct product purchase for:', productToPurchase.identifier);
         const { customerInfo } = await Purchases.purchaseStoreProduct(productToPurchase);
-        const isActive = isCustomerEntitled(customerInfo);
-        await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
-        return isActive;
+        return isCustomerEntitled(customerInfo);
       }
     } catch (directErr: any) {
       if (
@@ -294,16 +277,13 @@ export async function purchasePremiumPlan(planId: string): Promise<boolean> {
  */
 export async function restorePremiumPurchases(): Promise<boolean> {
   if (Platform.OS === 'web' || isExpoGo) {
-    const cached = await AsyncStorage.getItem(STORAGE_KEY);
-    return cached === 'true';
+    return false;
   }
 
   try {
     await initializePurchases();
     const customerInfo = await Purchases.restorePurchases();
-    const isActive = isCustomerEntitled(customerInfo);
-    await AsyncStorage.setItem(STORAGE_KEY, isActive ? 'true' : 'false');
-    return isActive;
+    return isCustomerEntitled(customerInfo);
   } catch (error: any) {
     if (
       error?.userCancelled ||
