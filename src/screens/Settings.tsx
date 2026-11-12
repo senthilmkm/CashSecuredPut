@@ -460,7 +460,7 @@ export default function Settings({
       </View>
 
       {/* Version Details */}
-      <Text style={styles.versionText}>CashSecuredProfit v1.1.0 (Expo SDK 57)</Text>
+      <Text style={styles.versionText}>CashSecuredProfit v1.2.0 (Expo SDK 57)</Text>
     </ScrollView>
   );
 }
